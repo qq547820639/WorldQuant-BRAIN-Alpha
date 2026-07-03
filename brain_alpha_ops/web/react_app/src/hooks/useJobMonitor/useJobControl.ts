@@ -5,7 +5,7 @@ import type { BrainCredentials, JobStatus } from '@/types';
 import { useApi } from '@/hooks/useApi';
 import { requestJobCancel, cancelResultEventMessage, type CancelReason } from '@/api/jobCancel';
 import { requestNotificationPermission } from '@/hooks/useJobNotifications';
-import type { NotifyFn } from './types';
+import type { NotifyFn } from './index';
 
 type ApiInstance = ReturnType<typeof useApi>;
 

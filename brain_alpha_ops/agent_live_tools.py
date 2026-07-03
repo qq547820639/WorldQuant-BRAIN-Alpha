@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from brain_alpha_ops.agent_research_tools import run_parallel_backtest_from_args
-from brain_alpha_ops.agent_tool_errors import tool_error
+from brain_alpha_ops.errors import tool_error
 from brain_alpha_ops.brain_api.user_alpha_sync import (
     USER_ALPHA_SYNC_RANGES,
     list_user_alphas_for_sync,

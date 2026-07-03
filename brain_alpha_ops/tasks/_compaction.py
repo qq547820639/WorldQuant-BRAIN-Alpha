@@ -10,7 +10,7 @@ from typing import Any
 
 from brain_alpha_ops.redaction import redact_data
 
-from ._constants import COMPACT_LIST_KEYS, JOB_PREVIEW_ROWS
+from . import COMPACT_LIST_KEYS, JOB_PREVIEW_ROWS
 
 
 def _json_safe(value: Any) -> Any:

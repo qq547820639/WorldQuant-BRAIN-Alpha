@@ -2,13 +2,13 @@ import logging
 
 from brain_alpha_ops import data as data_module
 from brain_alpha_ops.research import generator as generator_module
-from brain_alpha_ops.compliance import redline_check_alignment
-from brain_alpha_ops.compliance import redline_check_coverage
-from brain_alpha_ops.compliance import redline_check_datasets
-from brain_alpha_ops.compliance import redline_check_no_custom_extension
-from brain_alpha_ops.compliance import redline_check_thresholds
-from brain_alpha_ops.compliance import redline_check_traceability
-from brain_alpha_ops.compliance import redline_models
+from brain_alpha_ops.compliance import redline_checks as redline_check_alignment
+from brain_alpha_ops.compliance import redline_checks as redline_check_coverage
+from brain_alpha_ops.compliance import redline_checks as redline_check_datasets
+from brain_alpha_ops.compliance import redline_checks as redline_check_no_custom_extension
+from brain_alpha_ops.compliance import redline_checks as redline_check_thresholds
+from brain_alpha_ops.compliance import redline_checks as redline_check_traceability
+from brain_alpha_ops.compliance import redline_core as redline_models
 from brain_alpha_ops.compliance import redline_verifier
 
 

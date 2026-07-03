@@ -22,7 +22,7 @@ import {
   CandidateWorkflowPlan,
   CandidateListMeta,
 } from '@/components/CandidateTableUtils';
-import { getStarred } from '@/utils/starredCandidates';
+import { getStarred } from '@/utils';
 import type { SortKey } from './useCandidateTableState';
 import { PAGE_SIZE } from './useCandidateTableState';
 

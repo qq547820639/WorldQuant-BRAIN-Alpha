@@ -828,7 +828,7 @@ def test_dependency_policy_accepts_project_pyproject():
 
 
 def test_research_calibration_wrapper_exports_auto_calibrate():
-    from brain_alpha_ops.research.calibration import auto_calibrate_if_stalled
+    from brain_alpha_ops.research import auto_calibrate_if_stalled
 
     assert callable(auto_calibrate_if_stalled)
 

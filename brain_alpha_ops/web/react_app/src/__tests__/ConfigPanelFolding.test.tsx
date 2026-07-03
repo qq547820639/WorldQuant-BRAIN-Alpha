@@ -18,8 +18,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import CredentialsSection from '@/components/ConfigPanel/CredentialsSection';
-import LocalCacheConnectionSection from '@/components/ConfigPanel/LocalCacheConnectionSection';
+import { CredentialsSection } from '@/components/ConfigPanel/ConfigPanelCredentials';
+import { LocalCacheConnectionSection } from '@/components/ConfigPanel/ConfigPanelCredentials';
 import type { BrainCredentials } from '@/types';
 
 const EMPTY_CREDS: BrainCredentials = { username: '', password: '', token: '' };

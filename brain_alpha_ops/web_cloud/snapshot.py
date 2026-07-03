@@ -18,9 +18,9 @@ from brain_alpha_ops.web_cloud.snapshot import *  # noqa: F401,F403
 # Explicitly re-export private symbols so test monkeypatch/patch against
 # ``brain_alpha_ops.web_cloud.snapshot._xxx`` keeps working when this shim is
 # loaded directly by path.
-from brain_alpha_ops.web_cloud.snapshot._cloud_alpha import _bounded_rows  # noqa: F401
-from brain_alpha_ops.web_cloud.snapshot._constants import _safe_error_message  # noqa: F401
-from brain_alpha_ops.web_cloud.snapshot._official_context_read import _metadata_int  # noqa: F401
-from brain_alpha_ops.web_cloud.snapshot._refresh_service import (  # noqa: F401
+from brain_alpha_ops.web_cloud.snapshot.snapshot import _bounded_rows  # noqa: F401
+from brain_alpha_ops.web_cloud.snapshot.snapshot import _safe_error_message  # noqa: F401
+from brain_alpha_ops.web_cloud.snapshot.snapshot_context import _metadata_int  # noqa: F401
+from brain_alpha_ops.web_cloud.snapshot.snapshot_context import (  # noqa: F401
     _cloud_refresh_progress_message,
 )

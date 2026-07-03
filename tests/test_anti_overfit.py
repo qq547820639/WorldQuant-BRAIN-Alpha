@@ -64,7 +64,7 @@ def test_candidate_anti_overfit_short_official_series_fails_closed():
 
 
 def test_research_anti_overfit_imports_canonical_service():
-    from brain_alpha_ops.research.anti_overfit import AntiOverfitService as ResearchService
+    from brain_alpha_ops.research import AntiOverfitService as ResearchService
 
     assert ResearchService is AntiOverfitService
 

@@ -21,7 +21,7 @@ def _components(names: list[str]) -> str:
 
 def test_react_app_state_cards_have_accessible_navigation_semantics():
     app = resolve_react_source(APP)
-    base_state = resolve_react_source(REACT_SRC / "hooks" / "useAppState" / "useBaseState.ts")
+    base_state = resolve_react_source(REACT_SRC / "hooks" / "useAppState" / "useAppStateState.ts")
 
     assert "useState<CardViewId>(readViewFromHash)" in base_state
     assert 'aria-label="切换导航菜单"' in app
@@ -34,7 +34,7 @@ def test_react_dashboard_and_candidate_errors_are_announced():
         "CandidateTable.tsx",
         "CandidateTableToolbar.tsx",
         "CandidateTableToolbarFilterToolbar.tsx",
-        "CandidateTableSubComponents.tsx",
+        "CandidateTableSubComponents",
         "CandidateDetailPanel.tsx",
     ])
     snapshots = _component("SnapshotPanel")

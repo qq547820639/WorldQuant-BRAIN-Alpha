@@ -10,7 +10,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PIPELINE = ROOT / "brain_alpha_ops" / "research" / "pipeline.py"
+DEFAULT_PIPELINE = ROOT / "brain_alpha_ops" / "research" / "pipeline"
 DEFAULT_STATE = ROOT / "brain_alpha_ops" / "research" / "pipeline_state.py"
 SCHEMA_VERSION = "pipeline_runtime_state_check.v1"
 MAX_INIT_SELF_ASSIGNMENTS = 5
@@ -20,13 +20,19 @@ MIN_RUNTIME_STATE_FIELDS = 20
 def _resolve_pipeline_source(pipeline_path: Path) -> str:
     """Return the Python source to analyse for the pipeline contract.
 
-    ``pipeline.py`` is a re-export shim after the P1-5 refactor; the actual
-    implementation lives in the ``pipeline/`` subpackage.  When the shim is
-    detected, aggregate every ``.py`` file in the subpackage so the AST
-    checks (class definition, ``__init__`` self-assignments, bind call)
-    operate on the real implementation.
+    ``pipeline.py`` was a re-export shim that has been removed; the actual
+    implementation lives in the ``pipeline/`` subpackage.  When the path is a
+    directory, aggregate every ``.py`` file in it so the AST checks (class
+    definition, ``__init__`` self-assignments, bind call) operate on the real
+    implementation.  A legacy ``.py`` file path is still supported: if a
+    sibling subpackage directory exists, its files are appended.
     """
     pipeline_path = Path(pipeline_path)
+    if pipeline_path.is_dir():
+        return "\n\n".join(
+            child.read_text(encoding="utf-8")
+            for child in sorted(pipeline_path.glob("*.py"))
+        )
     source = pipeline_file_text = pipeline_path.read_text(encoding="utf-8")
     subpackage = pipeline_path.with_suffix("")  # pipeline.py -> pipeline
     if subpackage.is_dir():

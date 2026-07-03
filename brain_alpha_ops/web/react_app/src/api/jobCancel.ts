@@ -1,6 +1,6 @@
 import type { ApiResponse, UnifiedProgress } from '@/types';
 import { classifyJobState } from '@/helpers/runPayload';
-import { csrfHeaders } from '@/utils/csrf';
+import { csrfHeaders } from '@/utils';
 
 export type CancelReason =
   | 'sse_exhausted'

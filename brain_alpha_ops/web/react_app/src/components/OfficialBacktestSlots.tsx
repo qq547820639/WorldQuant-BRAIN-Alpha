@@ -4,7 +4,7 @@ import { useCallback, useEffect } from 'react';
 import { readinessReasonLabel } from '@/helpers/readinessLabels';
 import { useGlobalData } from '@/hooks/useGlobalData';
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from '@/types';
-import { backtestActiveCount, backtestSlotLimit } from '@/utils/backtestSlots';
+import { backtestActiveCount, backtestSlotLimit } from '@/utils';
 import Skeleton from './Skeleton';
 import ErrorCard from './ErrorCard';
 

@@ -8,7 +8,7 @@ import { useEffect, useCallback } from 'react';
 import type { JobStatus } from '@/types';
 import type { CancelReason } from '@/api/jobCancel';
 import { classifyJobState, jobStatusMessage } from '@/helpers/runPayload';
-import { saveResumeState } from '@/utils/resumeState';
+import { saveResumeState } from '@/utils';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
 
 const WATCHDOG_POLL_INTERVAL = 2000;

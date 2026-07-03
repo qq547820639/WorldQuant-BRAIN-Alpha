@@ -4,12 +4,7 @@
  * See styles/ for the actual rule definitions.
  */
 @import './styles/theme-tokens.css';
-@import './styles/base.css';
-@import './styles/components-ui.css';
-@import './styles/components-panel.css';
-@import './styles/components-layout.css';
-@import './styles/utilities.css';
-@import './styles/responsive.css';
+@import './styles/app.css';
 
 @tailwind base;
 @tailwind components;

@@ -21,7 +21,7 @@ from brain_alpha_ops.research.guidance import (
     assistant_guidance_candidate_metadata,
     ensure_assistant_guidance_digest,
 )
-from brain_alpha_ops.research.local_backtest_config import (
+from brain_alpha_ops.research.local_backtest_engine import (
     PREFILTER_BACKTEST_DATES,
     PREFILTER_BACKTEST_SYMBOLS,
 )

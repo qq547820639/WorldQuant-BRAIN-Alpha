@@ -4,7 +4,7 @@ import { useGlobalData } from '@/hooks/useGlobalData';
 import type { JobStatus, ResearchMemorySummary, TrendApiResponse } from '@/types';
 import type { TrendData } from '@/components/TrendPanel';
 import { safeDisplayErrorMessage } from '@/helpers/errorExperience';
-import { saveResumeState } from '@/utils/resumeState';
+import { saveResumeState } from '@/utils';
 import {
   loadTrendData,
   appendTrendPoint,

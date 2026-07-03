@@ -6,8 +6,8 @@ import type { BrainCredentials } from '@/types';
 import Skeleton from './Skeleton';
 import ErrorCard from './ErrorCard';
 import { useConfigForm } from '@/hooks/useConfigForm';
-import CredentialsSection from './ConfigPanel/CredentialsSection';
-import RunConfigSection from './ConfigPanel/RunConfigSection';
+import { CredentialsSection } from './ConfigPanel/ConfigPanelCredentials';
+import { RunConfigSection } from './ConfigPanel/ConfigPanelSections';
 import { payloadFromForm } from './ConfigPanel/utils';
 
 interface Props {

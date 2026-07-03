@@ -1,4 +1,8 @@
-/** Scoring visualization — Terminal Precision v2.0 */
+/** Scoring visualization — Terminal Precision v2.0
+ *
+ *  Main ScoringPanel component + inline ImprovementHints (merged from the
+ *  previously fragmented ImprovementHints.tsx). Subcomponents are imported
+ *  from the consolidated ScoringPanelHeader and ScoringPanelGates modules. */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cancelResultExperience, requestJobCancel } from '@/api/jobCancel';
 import { apiErrorMessage } from '@/helpers/errorExperience';
@@ -11,18 +15,21 @@ import EmptyState from '../EmptyState';
 import type { ScoreHistoryPoint } from '@/components/ScoreBreakdown/ScoreHistory';
 import type {
   Candidate,
+  FailureItem,
   GateDecisionPayload,
   ScoringAttributionResponse,
   ScoringResult,
   SSEEvent,
   UnifiedProgress,
 } from '@/types';
-import ScoringHeader from './Header';
-import GateDecisionStrip from './GateDecisionStrip';
-import GateResults from './GateResults';
-import ImprovementHints from './ImprovementHints';
-import ScoreHistory from './ScoreHistory';
-import { safeScoringText, lifecycleStatusLabel, metricWithStatus, nonEmpty } from './utils';
+import {
+  ScoringHeader,
+  safeScoringText,
+  lifecycleStatusLabel,
+  metricWithStatus,
+  nonEmpty,
+} from './ScoringPanelHeader';
+import { GateDecisionStrip, GateResults, ScoreHistory } from './ScoringPanelGates';
 
 interface Props {
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
@@ -331,6 +338,71 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       <GateResults hardGates={hardGates} softGates={softGates} />
 
       <ImprovementHints failures={failures} hints={hints} />
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ImprovementHints — failure insights + improvement hint lists (merged inline)
+// ──────────────────────────────────────────────────────────────────────────
+
+function ImprovementHints({
+  failures,
+  hints,
+}: {
+  failures: FailureItem[];
+  hints: string[];
+}) {
+  if (failures.length === 0 && hints.length === 0) return null;
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <InsightList title="主要失败原因" items={failures} />
+      <HintList title="改进建议" items={hints} />
+    </div>
+  );
+}
+
+function InsightList({ title, items }: { title: string; items: FailureItem[] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span>{title}</span>
+      </div>
+      <div className="panel-body">
+        {items.map((item, i) => (
+          <div
+            key={`${item.item || 'failure'}-${i}`}
+            className="text-xs px-3.5 py-2 border-b border-border-subtle last:border-0"
+          >
+            <p className="text-negative font-medium">
+              {safeScoringText(item.item, '评分项待确认')}
+            </p>
+            <p className="text-text-tertiary">
+              {safeScoringText(item.reason || item.severity, '原因待确认')}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HintList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span>{title}</span>
+      </div>
+      <div className="panel-body">
+        {items.map((item, i) => (
+          <p
+            key={`${item}-${i}`}
+            className="text-xs text-text-secondary px-3.5 py-2 border-b border-border-subtle last:border-0"
+          >
+            {safeScoringText(item, '建议待确认')}
+          </p>
+        ))}
+      </div>
     </div>
   );
 }

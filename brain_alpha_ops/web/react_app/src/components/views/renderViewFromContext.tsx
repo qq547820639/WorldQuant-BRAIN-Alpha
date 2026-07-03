@@ -21,7 +21,7 @@
 
 import type { RenderViewProps } from './renderView';
 import { renderActiveView } from './renderView';
-import { useAppStateContext } from '@/hooks/useAppState/AppStateContext';
+import { useAppStateContext } from '@/hooks/useAppState/useAppState';
 
 /**
  * Preferred renderer component. Reads the unified app state from context

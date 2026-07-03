@@ -55,7 +55,7 @@ _WEB_BRIDGE_MAP: dict[str, tuple[str, str]] = {
     "brain_alpha_ops.web_scoring_interpreter": ("brain_alpha_ops.web.misc", "web_scoring_interpreter"),
     "brain_alpha_ops.web_review": ("brain_alpha_ops.web.misc", "web_snapshot_facade"),
     "brain_alpha_ops.web_review_api": ("brain_alpha_ops.web.misc", "web_snapshot_facade"),
-    "brain_alpha_ops.web_sqlite_indexes": ("brain_alpha_ops.web.misc", "web_sync_status_payload"),
+    "brain_alpha_ops.web_sqlite_indexes": ("brain_alpha_ops.web.misc", "web_payload_validation"),
     "brain_alpha_ops.web_simulation_job": ("brain_alpha_ops.web.misc", "web_alpha_lifecycle"),
     "brain_alpha_ops.web_snapshots": ("brain_alpha_ops.web.misc", "web_assistant_snapshots"),
     "brain_alpha_ops.web_snapshot_facade": ("brain_alpha_ops.web.misc", "web_snapshot_facade"),
@@ -69,7 +69,7 @@ _WEB_BRIDGE_MAP: dict[str, tuple[str, str]] = {
     "brain_alpha_ops.web_alpha_lifecycle": ("brain_alpha_ops.web.misc", "web_alpha_lifecycle"),
     "brain_alpha_ops.web_assistant_snapshots": ("brain_alpha_ops.web.misc", "web_assistant_snapshots"),
     "brain_alpha_ops.web_cloud_context_refresh": ("brain_alpha_ops.web_cloud", "snapshot"),
-    "brain_alpha_ops.web_sync_status_payload": ("brain_alpha_ops.web.misc", "web_sync_status_payload"),
+    "brain_alpha_ops.web_sync_status_payload": ("brain_alpha_ops.web.misc", "web_payload_validation"),
 }
 
 

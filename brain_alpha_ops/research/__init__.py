@@ -48,7 +48,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ExpressionEngine": ("brain_alpha_ops.research.expression_engine", "ExpressionEngine"),
     "validate_expression": ("brain_alpha_ops.research.expression_engine", "validate_expression"),
     "RecordSqliteIndex": ("brain_alpha_ops.research.record_sqlite_index", "RecordSqliteIndex"),
-    "AntiOverfitService": ("brain_alpha_ops.research.anti_overfit", "AntiOverfitService"),
+    "AntiOverfitService": ("brain_alpha_ops.scoring.anti_overfit", "AntiOverfitService"),
     "RollingValidationService": ("brain_alpha_ops.research.rolling_validation", "RollingValidationService"),
     "RobustnessDecision": ("brain_alpha_ops.research.robustness_policy", "RobustnessDecision"),
     "RobustnessPolicy": ("brain_alpha_ops.research.robustness_policy", "RobustnessPolicy"),
@@ -108,7 +108,30 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ContextAdapter": ("brain_alpha_ops.research.hypothesis_driven_generator", "ContextAdapter"),
 }
 
-__all__ = [*_LAZY_EXPORTS, "alpha_fusion"]
+__all__ = [*_LAZY_EXPORTS, "alpha_fusion", "auto_calibrate_if_stalled"]
+
+
+def auto_calibrate_if_stalled(
+    storage_dir: str = "data",
+    **kwargs: object,
+) -> dict:
+    """Check convergence stats and auto-trigger calibration if stalled.
+
+    Delegates to ``calibrate_weights.auto_calibrate_if_stalled`` when the
+    standalone calibrator module is installed.  Returns a safe no-op result
+    when it is not available so that the research pipeline is not blocked by
+    a missing optional CLI dependency.
+
+    Merged from ``research/calibration.py``.
+    """
+    try:
+        from calibrate_weights import (
+            auto_calibrate_if_stalled as _real,  # type: ignore[import-not-found]
+        )
+
+        return _real(storage_dir, **kwargs)
+    except ImportError:
+        return {"ok": True, "triggered": False, "reason": "calibrator_not_installed"}
 
 
 def __getattr__(name: str) -> Any:

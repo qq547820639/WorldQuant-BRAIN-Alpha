@@ -3,7 +3,7 @@ import { cancelResultEventMessage, requestJobCancel, type CancelReason } from '@
 import { useApi } from '@/hooks/useApi';
 import { classifyJobState, jobStatusMessage, resolveJobEventState } from '@/helpers/runPayload';
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from '@/types';
-import { saveResumeState } from '@/utils/resumeState';
+import { saveResumeState } from '@/utils';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
 import { useJobRecovery } from '@/hooks/useJobRecovery';
 import { useJobSseConnection } from '@/hooks/useJobSseConnection';

@@ -21,7 +21,7 @@ import {
   type ActionableErrorPayload,
   type ErrorKind,
   type ErrorSeverity,
-} from '@/types/errors';
+} from '@/types';
 
 // ── Severity styling (mirrors ErrorCard's severityConfig) ────────────────
 

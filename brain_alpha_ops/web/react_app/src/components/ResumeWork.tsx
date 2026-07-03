@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, memo } from 'react';
-import { getResumeState, hasResumeHistory, type ResumeState } from '@/utils/resumeState';
+import { getResumeState, hasResumeHistory, type ResumeState } from '@/utils';
 
 // ── Props ──────────────────────────────────────────────────────────────────
 

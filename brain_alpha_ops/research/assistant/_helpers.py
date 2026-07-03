@@ -12,7 +12,7 @@ import math
 from hashlib import sha256
 from typing import Any
 
-from brain_alpha_ops.research._value_helpers import _float_value, _int_value
+from brain_alpha_ops.research._market_data_helpers import _float_value, _int_value
 
 
 def _digest_text(value: str) -> str:

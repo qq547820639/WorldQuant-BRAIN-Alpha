@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { SSEEvent } from '@/types';
-import { streamToken } from '@/utils/csrf';
-import { reportIgnoredError } from '@/utils/reportIgnoredError';
+import { streamToken, reportIgnoredError } from '@/utils';
 
 type NamedSSEEvent = NonNullable<SSEEvent['type']>;
 

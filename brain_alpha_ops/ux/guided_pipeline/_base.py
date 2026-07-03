@@ -9,8 +9,9 @@ from typing import Any, Callable
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import PipelineResult
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.ux import guided_display, guided_storage
-from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase
+from brain_alpha_ops.ux import guided as guided_storage
+guided_display = guided_storage
+from brain_alpha_ops.ux.guided import CheckpointData, PipelinePhase
 
 from ._state import classify_error, logger
 

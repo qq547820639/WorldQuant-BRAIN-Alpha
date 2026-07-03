@@ -8,8 +8,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { JobStatus } from '@/types';
 import { classifyJobState } from '@/helpers/runPayload';
-import { reportIgnoredError } from '@/utils/reportIgnoredError';
-import { saveResumeState } from '@/utils/resumeState';
+import { reportIgnoredError, saveResumeState } from '@/utils';
 
 const SESSION_KEY_JOB_ID = 'brain_alpha_active_job_id';
 const RECOVERY_TIMEOUT_MS = 8000;

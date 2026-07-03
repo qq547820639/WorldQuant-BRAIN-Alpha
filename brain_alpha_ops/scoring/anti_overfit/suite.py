@@ -4,11 +4,13 @@ from .models import (
     AntiOverfitResult,
     _IC_STABILITY_WINDOW_MIN,
 )
-from .utils import _safe_mean
-from .ic_stability import compute_ic_stability
-from .regime_stress import compute_regime_stress
-from .placebo import compute_placebo_test
-from .half_life import estimate_half_life
+from .checks import (
+    _safe_mean,
+    compute_ic_stability,
+    compute_regime_stress,
+    compute_placebo_test,
+    estimate_half_life,
+)
 
 
 def run_anti_overfit_suite(

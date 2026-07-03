@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from brain_alpha_ops.research.anti_overfit import AntiOverfitService
+from brain_alpha_ops.scoring.anti_overfit import AntiOverfitService
 from brain_alpha_ops.research.llm_review import cross_review_assistant_response
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository

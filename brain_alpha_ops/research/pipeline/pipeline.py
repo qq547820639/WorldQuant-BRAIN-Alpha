@@ -34,8 +34,11 @@ from ..convergence import ConvergenceTracker
 from ..generator import CandidateGenerator
 from ..knowledge_base import StructuredKnowledgeBase
 from ..llm_review import CrossReviewService
-from ..local_backtest_config import PREFILTER_BACKTEST_DATES, PREFILTER_BACKTEST_SYMBOLS
-from ..local_backtest_engine import LocalBacktestEngine
+from ..local_backtest_engine import (
+    LocalBacktestEngine,
+    PREFILTER_BACKTEST_DATES,
+    PREFILTER_BACKTEST_SYMBOLS,
+)
 from ..official_call_guard import OfficialCallGuard
 from ..pipeline_helpers import rank_candidates
 from ..pipeline_state import (
@@ -296,7 +299,7 @@ class PipelineRunMixin:
 
         # Auto-calibration check (non-blocking)
         try:
-            from ..calibration import auto_calibrate_if_stalled
+            from .. import auto_calibrate_if_stalled
             calib = auto_calibrate_if_stalled(self.config.storage_dir)
             if calib.get("triggered") and calib.get("advice"):
                 reason = calib.get("reason")

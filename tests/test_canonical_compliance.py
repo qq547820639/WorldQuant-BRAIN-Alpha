@@ -621,7 +621,7 @@ class TestCanonicalComplianceScript:
         assert any("dataset_field_count_mismatch" in item["deviation"] for item in report["all_deviations"])
 
     def test_generator_fallback_templates_do_not_embed_field_literals(self):
-        from brain_alpha_ops.compliance.redline_helpers import _candidate_generator_fallback_templates
+        from brain_alpha_ops.compliance.redline_core import _candidate_generator_fallback_templates
 
         templates = _candidate_generator_fallback_templates()
         assert templates

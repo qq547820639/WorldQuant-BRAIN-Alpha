@@ -6,7 +6,7 @@
 import { memo, useCallback, useState } from 'react';
 import type { Candidate, CandidateCheckResult } from '@/types';
 import ScoreBreakdown from './ScoreBreakdown';
-import { isStarred, toggleStar } from '@/utils/starredCandidates';
+import { isStarred, toggleStar } from '@/utils';
 import {
   candidateBlockerText,
   candidateIdentity,

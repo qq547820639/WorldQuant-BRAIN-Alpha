@@ -228,3 +228,16 @@ def _safe_float(value: Any) -> float | None:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def tool_error(exc: Exception, error_code: str, **context: Any) -> dict[str, Any]:
+    """Format an agent tool error using the shared user_error_payload helper.
+
+    Merged from ``agent_tool_errors.py``.  The import of
+    ``user_error_payload`` is deferred to call time because
+    ``error_payloads`` imports from this module, so a module-level import
+    would create a circular dependency.
+    """
+    from brain_alpha_ops.error_payloads import user_error_payload
+
+    return user_error_payload(exc, error_code=error_code, **context)

@@ -79,7 +79,7 @@ def test_pipeline_auto_calibration_uses_config_storage_dir(monkeypatch, tmp_path
         }
 
     monkeypatch.setattr(
-        "brain_alpha_ops.research.calibration.auto_calibrate_if_stalled",
+        "brain_alpha_ops.research.auto_calibrate_if_stalled",
         fake_auto_calibrate_if_stalled,
     )
     config = OpsConfig(

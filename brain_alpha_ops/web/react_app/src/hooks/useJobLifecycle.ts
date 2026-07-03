@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useApi } from '@/hooks/useApi';
 import { buildRunPayload, hasCredentials, jobStatusMessage } from '@/helpers/runPayload';
 import type { BrainCredentials, JobStatus } from '@/types';
-import { saveResumeState } from '@/utils/resumeState';
+import { saveResumeState } from '@/utils';
 import { saveJobId as saveSessionJobId, clearSavedJobId } from '@/hooks/useJobRecovery';
 import { requestNotificationPermission } from './useJobNotifications';
 

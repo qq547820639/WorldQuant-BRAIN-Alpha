@@ -14,7 +14,7 @@ from brain_alpha_ops.core_state import (
     JOB_TERMINAL_STATUSES as TERMINAL_STATUSES,
 )
 
-from ._constants import DEFAULT_WATCHDOG_ERROR
+from . import DEFAULT_WATCHDOG_ERROR
 
 
 def _updated_at(job: dict[str, Any]) -> float:

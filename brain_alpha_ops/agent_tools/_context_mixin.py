@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from brain_alpha_ops.agent_guidance_tools import (
+from brain_alpha_ops.agent_research_tools import (
     assistant_guidance_for_generator,
     assistant_guidance_summary,
     attach_assistant_guidance,
