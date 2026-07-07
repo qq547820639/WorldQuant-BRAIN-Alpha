@@ -261,8 +261,15 @@ class ProdCorrelationService:
 
         return ProdCorrelationResult(
             correlation=estimated_corr,
-            passed=estimated_corr < self._max_correlation,
+            # F-052: a local estimate must NEVER auto-pass a submission gate.
+            # Previously ``passed=estimated_corr < self._max_correlation`` let
+            # high-complexity expressions (estimated_corr 0.40/0.25) through
+            # when the official API was unavailable — a fail-open path on a
+            # safety gate. Force passed=False so the result always requires
+            # manual review, matching the allow_local_fallback=False branch
+            # (correlation=1.0, passed=False) conservative orientation.
+            passed=False,
             max_threshold=self._max_correlation,
             source="local_estimate",
-            error=reason or "official API unavailable, using local estimate",
+            error=reason or "official API unavailable, using local estimate (fail-closed)",
         )

@@ -84,7 +84,12 @@ class _SlotSubmissionMixin:
                     candidate.alpha_id,
                     data=p._runtime_data(cycle, pool, state.accepted_candidates, state.archive_stats),
                 )
-                return
+                # F-056: skip this failed slot and try the next open slot, do
+                # NOT return — returning aborts the whole loop so later slots
+                # (e.g. slots 2/3 in a 3-slot cycle) are never attempted. The
+                # dedupe branch above already uses `continue` for the same
+                # loop, confirming continue is the intended skip semantics.
+                continue
 
             p.backtests_submitted += 1
             p.services.runtime._record_lifecycle(candidate, "simulation_submitted", f"slot={slot}")

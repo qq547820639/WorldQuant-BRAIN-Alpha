@@ -10,6 +10,7 @@ Call ``register_all_backends()`` early in your application (e.g., in
 from __future__ import annotations
 
 import logging
+import threading
 
 from brain_alpha_ops.redaction import redact_error_message
 
@@ -61,14 +62,22 @@ def register_all_backends() -> list[str]:
 
 # Lazy BrainAPI singleton — only created when the api backend is first used.
 _api_instance = None
+# F-028: guard singleton creation. The api backend is registered with a lambda
+# that calls _get_brain_api(); multiple request threads can hit that lambda
+# concurrently on first use, racing to construct OfficialBrainAPI() and
+# overwriting each other with a half-initialized instance. Double-checked
+# locking ensures exactly one instance is ever created.
+_api_lock = threading.Lock()
 
 
 def _get_brain_api():
-    """Lazily create the API backend's BrainAPI instance."""
+    """Lazily create the API backend's BrainAPI instance (thread-safe)."""
     global _api_instance
-    if _api_instance is not None:
+    if _api_instance is not None:  # fast path — no lock once initialized
         return _api_instance
-
-    from brain_alpha_ops.brain_api.official import OfficialBrainAPI
-    _api_instance = OfficialBrainAPI()
-    return _api_instance
+    with _api_lock:
+        if _api_instance is not None:  # double-check under lock
+            return _api_instance
+        from brain_alpha_ops.brain_api.official import OfficialBrainAPI
+        _api_instance = OfficialBrainAPI()
+        return _api_instance

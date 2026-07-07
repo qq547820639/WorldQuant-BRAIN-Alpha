@@ -76,6 +76,20 @@ class TestProdCorrelationServiceFallback:
         # Short expression correlation (0.85) > 0.50 threshold
         assert result.passed is False
 
+    def test_fallback_is_fail_closed_even_when_estimate_below_threshold(self):
+        # F-052: a local estimate must never auto-pass a submission gate.
+        # A long expression yields a low estimate (0.40/0.25) that is below
+        # the default 0.70 threshold, but the fallback result must still be
+        # passed=False so the gate forces manual review when the official API
+        # is unavailable.
+        service = ProdCorrelationService(api=None)  # default max_correlation=0.70
+        result = service.check(
+            expression="group_neutralize(ts_mean(winsorize(market_cap, 0.01), 60), industry)"
+        )
+        assert result.source == "local_estimate"
+        assert result.correlation < 0.70  # estimate is below threshold...
+        assert result.passed is False  # ...yet the gate stays closed (F-052)
+
     def test_disable_fallback_returns_unavailable(self):
         service = ProdCorrelationService(api=None, allow_local_fallback=False)
         # No API and fallback disabled → unavailable

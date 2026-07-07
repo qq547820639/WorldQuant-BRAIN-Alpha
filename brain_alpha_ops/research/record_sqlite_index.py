@@ -34,6 +34,11 @@ class RecordSqliteIndex:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         conn = self._connect()
         try:
+            # F-053: acquire the write lock up-front so the read (MAX index)
+            # and the write (INSERT) run atomically under one write lock;
+            # deferred isolation would upgrade mid-transaction and can
+            # deadlock under concurrent writers.
+            conn.execute("BEGIN IMMEDIATE")
             _ensure_schema(conn)
             record_index = _next_record_index(conn, source_file)
             conn.execute(
@@ -46,6 +51,9 @@ class RecordSqliteIndex:
                 _row_values(record, source_file=source_file, kind=kind, record_index=record_index),
             )
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
         return {"ok": True, "schema_version": SCHEMA_VERSION, "source_file": source_file, "record_index": record_index}
@@ -54,6 +62,9 @@ class RecordSqliteIndex:
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         conn = self._connect()
         try:
+            # F-053: BEGIN IMMEDIATE so the DELETE + bulk INSERT run under one
+            # write lock acquired up-front (see append_record for rationale).
+            conn.execute("BEGIN IMMEDIATE")
             _ensure_schema(conn)
             conn.execute("DELETE FROM records")
             inserted = 0
@@ -73,6 +84,9 @@ class RecordSqliteIndex:
                     )
                     inserted += 1
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             conn.close()
         return {"ok": True, "schema_version": SCHEMA_VERSION, "record_count": inserted}
@@ -150,6 +164,12 @@ class RecordSqliteIndex:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        # F-053: switch to autocommit mode so write methods can issue an
+        # explicit "BEGIN IMMEDIATE" (acquiring the write lock up-front)
+        # instead of relying on Python's deferred-isolation implicit BEGIN,
+        # which upgrades to a write lock mid-transaction and can deadlock
+        # under concurrent writers. Read methods work the same in autocommit.
+        conn.isolation_level = None
         return conn
 
 

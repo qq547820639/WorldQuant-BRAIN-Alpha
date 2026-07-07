@@ -63,11 +63,30 @@ def spearman_r(xs: List[float], ys: List[float]) -> float:
 
 
 def rank_values(values: List[float]) -> List[float]:
-    """Return normalised ranks (0.0..1.0) for each value."""
+    """Return normalised ranks (0.0..1.0) for each value.
+
+    F-040: ties now receive average rank, matching anti_overfit/utils.py
+    ``_rank_transform``. Previously ties got sequential different ranks,
+    causing spearman_r to diverge from the anti_overfit implementation.
+    """
+    n = len(values)
+    if n == 0:
+        return []
+    if n == 1:
+        return [0.0]
     indexed = sorted(enumerate(values), key=lambda x: x[1])
-    ranks = [0.0] * len(values)
-    for rank, (i, _) in enumerate(indexed):
-        ranks[i] = float(rank) / max(1, len(values) - 1)
+    ranks = [0.0] * n
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and indexed[j + 1][1] == indexed[i][1]:
+            j += 1
+        # average 0-based rank for the tie group, then normalize to 0..1
+        avg_rank = (i + j) / 2.0
+        normalized = avg_rank / max(1, n - 1)
+        for k in range(i, j + 1):
+            ranks[indexed[k][0]] = normalized
+        i = j + 1
     return ranks
 
 

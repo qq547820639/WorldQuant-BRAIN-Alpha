@@ -408,7 +408,14 @@ def evaluate_release_score(
     thresholds: QualityThresholds | ThresholdPolicy,
     settings: Mapping[str, Any] | Any | None = None,
 ) -> GateDecision:
-    effective_settings = settings if settings is not None else metrics
+    # F-051: when settings is not supplied, fall back to an empty mapping — NOT
+    # to ``metrics``. The previous ``else metrics`` handed the metrics dict
+    # (sharpe/returns/fitness ...) to from_thresholds, which then scanned it
+    # for "delay"/"data_delay" keys and could misread metric values as the
+    # simulation delay, producing wrong sharpe/fitness thresholds. An empty
+    # mapping makes _settings_delay_with_source fall through to its safe
+    # default (delay=1, "default_delay_1").
+    effective_settings = settings if settings is not None else {}
     policy = (
         thresholds
         if isinstance(thresholds, ThresholdPolicy)
