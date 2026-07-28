@@ -53,6 +53,8 @@ export default memo(function CredentialQuickStart({
   // P1-2: countdown timer for delayed retry actions
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // U-015: ref for the guided-retry setTimeout so it can be cleared on unmount.
+  const guidedRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (countdown <= 0) {
@@ -75,6 +77,19 @@ export default memo(function CredentialQuickStart({
       }
     };
   }, [countdown]);
+
+  // U-015: clear the guided-retry timer if the component unmounts before it
+  // fires, preventing a setState-after-unmount warning/leak. Previously the
+  // timer's cleanup function was returned from handleGuidedRetry but never
+  // consumed by any effect, so the setTimeout outlived the component.
+  useEffect(() => {
+    return () => {
+      if (guidedRetryTimerRef.current) {
+        clearTimeout(guidedRetryTimerRef.current);
+        guidedRetryTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // P1-2: resolve error guide from the last failed connection test
   const errorGuide: ConnectionErrorGuideEntry | undefined = getConnectionErrorGuide(
@@ -163,10 +178,16 @@ export default memo(function CredentialQuickStart({
         : errorGuide.waitSeconds || 0;
     if (waitSeconds > 0) {
       setCountdown(waitSeconds);
-      const timer = setTimeout(() => {
+      // U-015: store the timer in a ref so the unmount cleanup effect can
+      // cancel it. Previously the cleanup was returned but never consumed.
+      if (guidedRetryTimerRef.current) {
+        clearTimeout(guidedRetryTimerRef.current);
+      }
+      guidedRetryTimerRef.current = setTimeout(() => {
+        guidedRetryTimerRef.current = null;
         handleTestConnection();
       }, waitSeconds * 1000);
-      return () => clearTimeout(timer);
+      return;
     }
     handleTestConnection();
   }, [errorGuide, testResult, handleTestConnection]);

@@ -355,15 +355,32 @@ enforces it at the API layer so direct imports cannot bypass it.
 
 
 def real_submit_test_override_enabled() -> bool:
-    """Return True only for explicit test-approved direct-submit exercises."""
+    """Return True only for explicit test-approved direct-submit exercises.
 
+    F-005: previously trusted the ``PYTEST_CURRENT_TEST`` environment variable
+    as the third gate. That env var is an ordinary string that operators or
+    container orchestrators can forge, so combined with the other two envs it
+    allowed bypassing ``REAL_SUBMIT_DISABLED_WEB_FLOW=True`` and triggering a
+    real submit outside the test process. The third gate now verifies the
+    call stack actually originates from the pytest framework via
+    ``sys._getframe`` traversal, which cannot be faked by env manipulation.
+    """
     import os
+    import sys
 
-    return (
-        os.environ.get("BRAIN_ALPHA_FORCE_REAL_SUBMIT") == "1"
-        and os.environ.get("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS") == "1"
-        and bool(os.environ.get("PYTEST_CURRENT_TEST"))
-    )
+    if os.environ.get("BRAIN_ALPHA_FORCE_REAL_SUBMIT") != "1":
+        return False
+    if os.environ.get("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS") != "1":
+        return False
+    # F-005: walk the call stack; only return True if a frame's source file
+    # belongs to the pytest framework itself. Env spoofing cannot satisfy this.
+    frame = sys._getframe(1)
+    while frame is not None:
+        f_file = frame.f_globals.get("__file__", "") or ""
+        if "pytest" in f_file or "_pytest" in f_file:
+            return True
+        frame = frame.f_back
+    return False
 
 
 # ─── Submit guard integrity check ───────────────────────────────────────

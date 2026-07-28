@@ -54,7 +54,10 @@ def _pearson_r(x: list[float], y: list[float]) -> float:
     sy = _safe_std(y[:n], my)
     if sx < 1e-15 or sy < 1e-15:
         return 0.0
-    cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x[:n], y[:n])) / n
+    # F-039: use sample covariance (n-1) to match _safe_std's sample formula.
+    # Previously used /n (population) which underestimated correlation by
+    # factor (n-1)/n (e.g. 5% low at n=20).
+    cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x[:n], y[:n])) / (n - 1)
     return max(-1.0, min(1.0, cov / (sx * sy)))
 
 

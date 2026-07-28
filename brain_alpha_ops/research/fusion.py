@@ -153,7 +153,11 @@ def composite_ensemble(expressions: list[str], mode: str = "average") -> str:
         result = f"max(({expressions[0]}), ({expressions[1]}))"  # B-04: BRAIN vector max replaces ts_max
         for e in expressions[2:]:
             result = f"max(({result}), ({e}))"  # B-04: BRAIN vector max/min
-        return result
+        # F-055: validate like the average/rank_average/min branches — the max
+        # branch previously returned the raw result, bypassing the length
+        # (<=512) and paren-depth (<=12) checks and risking an expression that
+        # exceeds BRAIN platform limits.
+        return _validate_fusion_expr(result, "ensemble_max")
     elif mode == "min":
         result = f"min(({expressions[0]}), ({expressions[1]}))"  # B-04: BRAIN vector min(x, y), not ts_min
         for e in expressions[2:]:

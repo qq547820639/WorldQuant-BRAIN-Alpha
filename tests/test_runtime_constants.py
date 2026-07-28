@@ -1,4 +1,8 @@
 """Tests for brain_alpha_ops.runtime_constants — hardcoded safety constants."""
+import os
+import subprocess
+import sys
+
 from brain_alpha_ops.runtime_constants import (
     REAL_SUBMIT_DISABLED_WEB_FLOW,
     WebDefaults,
@@ -22,18 +26,43 @@ class TestSubmissionSafety:
     def test_real_submit_test_override_disabled_by_default(self, monkeypatch):
         monkeypatch.delenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", raising=False)
         monkeypatch.delenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", raising=False)
-        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
 
         assert real_submit_test_override_enabled() is False
 
-    def test_real_submit_test_override_requires_all_test_approval_env(self, monkeypatch):
+    def test_real_submit_test_override_requires_both_envs(self, monkeypatch):
+        # F-005: only one approval env set -> False
         monkeypatch.setenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
-        monkeypatch.setenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", "1")
-        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", raising=False)
         assert real_submit_test_override_enabled() is False
 
-        monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_runtime_constants.py::test_case (call)")
+        # F-005: both envs set AND called from within pytest -> True
+        monkeypatch.setenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", "1")
         assert real_submit_test_override_enabled() is True
+
+    def test_real_submit_test_override_rejects_non_pytest_call_stack(self):
+        # F-005: env spoofing from a non-pytest process must NOT bypass the
+        # guard. Spawn a plain ``python -c`` subprocess (no pytest frame on
+        # the call stack) with both approval envs set and verify the override
+        # returns False. This is the regression test for the env-forge flaw.
+        code = (
+            "from brain_alpha_ops.runtime_constants import "
+            "real_submit_test_override_enabled as f;"
+            "raise SystemExit(0 if f() is False else 1)"
+        )
+        env = dict(os.environ)
+        env["BRAIN_ALPHA_FORCE_REAL_SUBMIT"] = "1"
+        env["BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS"] = "1"
+        env.pop("PYTEST_CURRENT_TEST", None)
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            env=env,
+            capture_output=True,
+            cwd=str(__import__("pathlib").Path(__file__).resolve().parent.parent),
+        )
+        assert result.returncode == 0, (
+            f"non-pytest process should NOT bypass submit guard (F-005); "
+            f"stderr={result.stderr.decode(errors='replace')}"
+        )
 
 
 class TestWebDefaults:

@@ -4,8 +4,12 @@ services:
       context: .
       target: runtime
     image: brain-alpha-ops:0.5.0
+    # F-007: bind to 127.0.0.1 on the host so the web console is reachable
+    # only from the host loopback, never the public network. WEB_HOST stays
+    # 0.0.0.0 *inside* the container so docker's port-forward can reach it;
+    # the host-side bind is what enforces local-only access.
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
     environment:
       - BRAIN_ALPHA_OPS_EXECUTION_MODE=headless
       - BRAIN_ALPHA_OPS_WEB_FRONTEND=react
@@ -16,6 +20,12 @@ services:
       - ./data:/app/data
       - ./config:/app/config
       - brain-alpha-artifacts:/app/artifacts
+    # F-007: defense in depth — drop all Linux capabilities and forbid
+    # privilege escalation so a compromised process cannot gain new caps.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     # NOTE: read_only is incompatible with browser execution mode.
     # If BRAIN_ALPHA_OPS_EXECUTION_MODE=browser, disable read_only or add
     # tmpfs mounts for Playwright cache paths (~/.cache/ms-playwright/).

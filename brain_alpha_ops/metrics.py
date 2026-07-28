@@ -20,6 +20,7 @@ Usage:
 
 from __future__ import annotations
 
+import threading
 import time
 from collections import defaultdict
 from contextlib import contextmanager
@@ -44,21 +45,28 @@ class MetricsCollector:
         self._gauges: dict[str, float] = {}
         self._timers: dict[str, list[float]] = defaultdict(list)
         self._histograms: dict[str, list[float]] = defaultdict(list)
+        # F-020: guard all reads/writes — the web console runs tasks in a
+        # ThreadPoolExecutor (WebDefaults.TASK_EXECUTOR_MAX_WORKERS=4), so
+        # concurrent counter increments / histogram appends race without a lock.
+        self._lock = threading.Lock()
 
     def counter(self, name: str, value: int = 1, **tags: str) -> None:
         """Increment a counter metric."""
         key = self._make_key(name, tags)
-        self._counters[key] += value
+        with self._lock:
+            self._counters[key] += value
 
     def gauge(self, name: str, value: float, **tags: str) -> None:
         """Set a gauge metric."""
         key = self._make_key(name, tags)
-        self._gauges[key] = value
+        with self._lock:
+            self._gauges[key] = value
 
     def histogram(self, name: str, value: float, **tags: str) -> None:
         """Record a histogram value."""
         key = self._make_key(name, tags)
-        self._histograms[key].append(value)
+        with self._lock:
+            self._histograms[key].append(value)
 
     @contextmanager
     def timer(self, name: str, **tags: str) -> Generator[None, None, None]:
@@ -72,9 +80,15 @@ class MetricsCollector:
 
     def summary(self) -> dict[str, Any]:
         """Get a summary of all collected metrics."""
+        # F-020: snapshot under the lock, then compute stats outside the lock
+        # to minimize critical-section hold time.
+        with self._lock:
+            counters = dict(self._counters)
+            gauges = dict(self._gauges)
+            histograms = {name: list(values) for name, values in self._histograms.items()}
         return {
-            "counters": dict(self._counters),
-            "gauges": dict(self._gauges),
+            "counters": counters,
+            "gauges": gauges,
             "histograms": {
                 name: {
                     "count": len(values),
@@ -82,16 +96,17 @@ class MetricsCollector:
                     "max": max(values) if values else 0,
                     "avg": sum(values) / len(values) if values else 0,
                 }
-                for name, values in self._histograms.items()
+                for name, values in histograms.items()
             },
         }
 
     def reset(self) -> None:
         """Reset all metrics."""
-        self._counters.clear()
-        self._gauges.clear()
-        self._timers.clear()
-        self._histograms.clear()
+        with self._lock:
+            self._counters.clear()
+            self._gauges.clear()
+            self._timers.clear()
+            self._histograms.clear()
 
     def _make_key(self, name: str, tags: dict[str, str]) -> str:
         """Create a metric key from name and tags."""

@@ -86,6 +86,13 @@ COPY config/ ./config/
 RUN mkdir -p /app/data /app/config /app/artifacts/evidence \
     && chmod 755 /app/artifacts/evidence
 
+# F-006: create a non-root user and hand it ownership of /app so the web
+# process can still write data/config/artifacts. The container must not run
+# as root — otherwise a container escape yields host root. evidence/ stays
+# 755 (world-readable, owner-writable) so the appuser can write screenshots.
+RUN useradd --create-home --shell /bin/bash appuser \
+    && chown -R appuser:appuser /app
+
 # Declare data/ and config/ as volumes so host or named volumes can supply
 # persistent state; on first run the image contents seed the volume.
 VOLUME ["/app/data", "/app/config"]
@@ -94,6 +101,9 @@ EXPOSE 8765
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health')" || exit 1
+
+# F-006: drop root for the default runtime target.
+USER appuser
 
 CMD ["python", "launch_web.py"]
 
@@ -104,6 +114,9 @@ CMD ["python", "launch_web.py"]
 # ──────────────────────────────────────────────────────────────────────────────
 FROM runtime AS runtime-full
 
+# F-006: runtime dropped to appuser; browser dependency install needs root.
+USER root
+
 # System libraries required by Playwright/Chromium (browser execution mode).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation libasound2 \
@@ -113,9 +126,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr2 xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Playwright and Chromium browser.
+# Install Playwright and Chromium browser. F-006: install browsers to a shared
+# path owned by appuser so the non-root runtime user can launch Chromium.
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 RUN pip install --no-cache-dir playwright \
-    && python -m playwright install chromium --with-deps
+    && python -m playwright install chromium --with-deps \
+    && chown -R appuser:appuser /opt/ms-playwright
+
+# F-006: drop back to the non-root user for browser execution too.
+USER appuser
 
 # Override execution mode to browser when using the full image.
 ENV BRAIN_ALPHA_OPS_EXECUTION_MODE=browser
