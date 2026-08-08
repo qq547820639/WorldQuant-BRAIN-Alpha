@@ -380,6 +380,17 @@ BRAIN Alpha Ops 的核心操作流程围绕生成、测试、打分、筛选四�
 
 ---
 
+## 15. 开发与贡献
+
+本项目遵循账户安全优先的设计原则，所有提交都必须经过独立的审批路径并由你最终确认。
+
+- **代码结构**：后端位于 `brain_alpha_ops/`，前端位于 `brain_alpha_ops/web/react_app/`，质量门禁脚本位于 `scripts/`。
+- **本地开发**：`python -m pip install -e ".[test,dev]"` 安装依赖；`python -m pytest tests/` 运行后端测试。
+- **质量门禁**：提交前请运行 `python scripts/quality_gate` 与 `python scripts/final_release_gate.py`，确保测试、覆盖率与安全检查全部通过。
+- **贡献**：欢迎提交 Issue 与 PR。请保持安全红线不变（默认禁止自动真实提交、真实提交需人工确认、凭据永不落盘/日志/截图/错误响应）。
+
+---
+
 ## 历史审计报告索引
 
 历史审计、诊断与交付报告已归档至 [`docs/history/`](docs/history/) 目录：

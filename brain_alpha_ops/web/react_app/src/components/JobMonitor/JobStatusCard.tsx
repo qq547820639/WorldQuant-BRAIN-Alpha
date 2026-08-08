@@ -1,6 +1,7 @@
 /** Individual job status display card. */
 
 import { memo } from 'react';
+import { shortValidationId } from '@/helpers/runPayload/run';
 
 interface Props {
   credentialSource: string;
@@ -79,7 +80,7 @@ export default memo(function JobStatusCard({
           <div className="flex items-center gap-2 mb-4 text-xs">
             <span className="text-text-tertiary">验证编号</span>
             <span className="font-mono-value px-2 py-0.5 rounded-sm bg-surface-2 text-text-secondary">
-              {validationId.slice(0, 8)}
+              {shortValidationId(validationId)}
             </span>
           </div>
         )}

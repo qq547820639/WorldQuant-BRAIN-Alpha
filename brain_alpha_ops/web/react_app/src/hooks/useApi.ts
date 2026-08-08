@@ -129,7 +129,13 @@ export function useApi<T = unknown>() {
                   const retryJson = await safeJson<R & ApiMeta>(res);
                   if (!retryJson) {
                     const msg = `HTTP ${res.status}: ${res.statusText}`;
-                    setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
+                    setState({
+                      data: null,
+                      loading: false,
+                      error: msg,
+                      lastErrorMeta: null,
+                      elapsedMs: Date.now() - requestStartRef.current,
+                    });
                     return null;
                   }
                   refreshSessionTokens(retryJson);
@@ -145,6 +151,7 @@ export function useApi<T = unknown>() {
                       loading: false,
                       error: apiErrorMessage(retryJson),
                       lastErrorMeta: retryJson,
+                      elapsedMs: Date.now() - requestStartRef.current,
                     });
                     return normalizedRetry;
                   }
@@ -155,6 +162,7 @@ export function useApi<T = unknown>() {
                     loading: false,
                     error: null,
                     lastErrorMeta: null,
+                    elapsedMs: Date.now() - requestStartRef.current,
                   });
                   if (method === 'POST') {
                     saveResumeState({ lastConnectionOk: true, lastError: null });
@@ -174,6 +182,7 @@ export function useApi<T = unknown>() {
                     loading: false,
                     error: retryMsg,
                     lastErrorMeta: retryError,
+                    elapsedMs: Date.now() - requestStartRef.current,
                   });
                   return normalizedRetryError;
                 }
@@ -181,11 +190,23 @@ export function useApi<T = unknown>() {
             }
             const msg = apiErrorMessage(json, `HTTP ${res.status}: ${res.statusText}`);
             const normalized = { ...json, ok: false } as R & ApiMeta;
-            setState({ data: null, loading: false, error: msg, lastErrorMeta: json });
+            setState({
+              data: null,
+              loading: false,
+              error: msg,
+              lastErrorMeta: json,
+              elapsedMs: Date.now() - requestStartRef.current,
+            });
             return normalized;
           }
           const msg = `HTTP ${res.status}: ${res.statusText}`;
-          setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
+          setState({
+            data: null,
+            loading: false,
+            error: msg,
+            lastErrorMeta: null,
+            elapsedMs: Date.now() - requestStartRef.current,
+          });
           return null;
         }
         const json = (await res.json()) as R & ApiMeta;
@@ -199,6 +220,7 @@ export function useApi<T = unknown>() {
             loading: false,
             error: apiErrorMessage(json),
             lastErrorMeta: json,
+            elapsedMs: Date.now() - requestStartRef.current,
           });
           return normalized;
         }
@@ -209,6 +231,7 @@ export function useApi<T = unknown>() {
           loading: false,
           error: null,
           lastErrorMeta: null,
+          elapsedMs: Date.now() - requestStartRef.current,
         });
         // P0-4: persist connection health after every successful POST
         if (method === 'POST') {
@@ -217,7 +240,13 @@ export function useApi<T = unknown>() {
         return normalized;
       } catch (err) {
         const msg = networkErrorMessage(err);
-        setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
+        setState({
+          data: null,
+          loading: false,
+          error: msg,
+          lastErrorMeta: null,
+          elapsedMs: Date.now() - requestStartRef.current,
+        });
         return null;
       } finally {
         if (timeout !== null) {

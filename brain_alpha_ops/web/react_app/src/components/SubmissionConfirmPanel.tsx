@@ -187,7 +187,9 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
           aria-live="assertive"
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-negative">提交前阻断复核数据加载失败: {safeDisplayErrorMessage(error)}</p>
+            <p className="text-sm text-negative">
+              提交前阻断复核数据加载失败: {safeDisplayErrorMessage(error)}
+            </p>
             <button type="button" onClick={load} className="btn btn-secondary text-sm">
               重试
             </button>

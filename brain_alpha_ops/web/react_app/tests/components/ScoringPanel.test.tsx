@@ -37,32 +37,31 @@ vi.mock("@/components/EmptyState", () => ({
   ),
 }));
 
-vi.mock("@/components/ScoringPanel/Header", () => ({
-  default: ({ candidate, scoring, onRetry }: any) => (
-    <div data-testid="scoring-header">
-      <span>Scoring Header</span>
-      {onRetry && <button type="button" onClick={onRetry}>重新评分</button>}
-    </div>
-  ),
-}));
+vi.mock("@/components/ScoringPanel/ScoringPanelHeader", async () => {
+  const actual = await vi.importActual("@/components/ScoringPanel/ScoringPanelHeader");
+  return {
+    ...actual,
+    ScoringHeader: ({ candidate, onRetry }: any) => (
+      <div data-testid="scoring-header">
+        <span>Scoring Header</span>
+        {onRetry && <button type="button" onClick={onRetry}>重新评分</button>}
+      </div>
+    ),
+  };
+});
 
-vi.mock("@/components/ScoringPanel/GateResults", () => ({
-  default: ({ hardGates, softGates }: any) => (
-    <div data-testid="gate-results">
-      <span>Hard Gates: {hardGates?.length || 0}</span>
-      <span>Soft Gates: {softGates?.length || 0}</span>
-    </div>
-  ),
-}));
-
-vi.mock("@/components/ScoringPanel/ImprovementHints", () => ({
-  default: ({ failures, hints }: any) => (
-    <div data-testid="improvement-hints">
-      <span>Failures: {failures?.length || 0}</span>
-      <span>Hints: {hints?.length || 0}</span>
-    </div>
-  ),
-}));
+vi.mock("@/components/ScoringPanel/ScoringPanelGates", async () => {
+  const actual = await vi.importActual("@/components/ScoringPanel/ScoringPanelGates");
+  return {
+    ...actual,
+    GateResults: ({ hardGates, softGates }: any) => (
+      <div data-testid="gate-results">
+        <span>Hard Gates: {hardGates?.length || 0}</span>
+        <span>Soft Gates: {softGates?.length || 0}</span>
+      </div>
+    ),
+  };
+});
 
 vi.mock("@/hooks/useSSE", () => ({
   useSSE: vi.fn(),
@@ -161,7 +160,6 @@ describe("ScoringPanel", () => {
       expect(screen.getByTestId("scoring-header")).toBeInTheDocument();
     });
     expect(screen.getByTestId("gate-results")).toBeInTheDocument();
-    expect(screen.getByTestId("improvement-hints")).toBeInTheDocument();
   });
 
   it("shows error state when scoring API fails", async () => {

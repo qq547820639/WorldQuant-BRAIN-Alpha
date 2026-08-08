@@ -98,7 +98,7 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const interval = setInterval(() => {
       refreshAll();
-    }, 60000);
+    }, 30000);
     return () => clearInterval(interval);
   }, [refreshAll]);
 

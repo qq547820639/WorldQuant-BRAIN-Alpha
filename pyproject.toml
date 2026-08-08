@@ -31,6 +31,7 @@ dependencies = [
     "pyyaml>=6.0,<7",
     "requests>=2.32.4,<3",
     "jsonschema>=4.20,<5",
+    "numpy>=1.26,<3",
 ]
 
 [project.optional-dependencies]

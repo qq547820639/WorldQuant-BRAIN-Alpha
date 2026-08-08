@@ -3,7 +3,7 @@
  * Maps activeView ID to the correct page component.
  * Workstream E2.1: prop-drilling is legacy — prefer renderActiveViewFromContext().
  */
-import { lazy, Suspense, Component, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, Component, type ComponentType } from 'react';
 import type { BrainCredentials, Candidate, CardViewId, PhaseData } from '@/types';
 import type { JobState } from '@/hooks/useJobState';
 import Dashboard from '@/components/Dashboard';
@@ -33,16 +33,10 @@ function ChunkLoadFallback() {
   return (
     <div className="panel" role="alert">
       <div className="panel-body-padded" style={{ textAlign: 'center', padding: '2rem' }}>
-        <h3
-          className="text-base font-semibold mb-2"
-          style={{ color: 'var(--color-text-bright)' }}
-        >
+        <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text-bright)' }}>
           页面已更新
         </h3>
-        <p
-          className="text-sm mb-4 leading-relaxed"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <p className="text-sm mb-4 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
           应用已发布新版本，当前页面资源已过期。请点击下方按钮刷新浏览器以加载最新内容。
         </p>
         <button
@@ -102,7 +96,7 @@ class ChunkErrorBoundary extends Component<ChunkErrorBoundaryProps, ChunkErrorBo
 /** Wraps a lazy component with Suspense + ChunkErrorBoundary. */
 function withLazyGuard(
   LazyComponent: React.LazyExoticComponent<ComponentType<any>>,
-  fallbackTitle?: string,
+  fallbackTitle?: string
 ) {
   return (props: Record<string, unknown>) => (
     <ChunkErrorBoundary fallbackTitle={fallbackTitle}>
@@ -272,9 +266,7 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
         </ErrorBoundary>
       );
     case 'official_backtests':
-      return (
-        <SafeOfficialBacktestSlots notify={notify} />
-      );
+      return <SafeOfficialBacktestSlots notify={notify} />;
     case 'scoring':
       return selectedCandidate ? (
         <SafeScoringPanel notify={notify} candidate={selectedCandidate} />
@@ -282,16 +274,14 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
         <ScoringPlaceholder onPickCandidate={() => onNavigate('candidates')} />
       );
     case 'quality_check':
-      return (
-        <SafeQualityCheckPanel notify={notify} />
-      );
+      return <SafeQualityCheckPanel notify={notify} />;
     case 'submission_confirm':
       return (
         <SafeSubmissionConfirmPanel
           notify={notify}
           // SubmissionConfirmPanel emits known CardViewId strings ('scoring', 'candidates', ...);
           // cast back to CardViewId for the renderView navigation callback.
-          onNavigate={(view) => onNavigate(view as CardViewId)}
+          onNavigate={(view: string) => onNavigate(view as CardViewId)}
         />
       );
     case 'checkpoint_status':
@@ -299,9 +289,7 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
         <SafeSnapshotPanel notify={notify} viewMode="checkpoint_status" onNavigate={onNavigate} />
       );
     case 'robustness':
-      return (
-        <SafeSnapshotPanel notify={notify} viewMode="robustness" onNavigate={onNavigate} />
-      );
+      return <SafeSnapshotPanel notify={notify} viewMode="robustness" onNavigate={onNavigate} />;
     case 'config':
       return (
         <SafeConfigPanel
@@ -316,9 +304,7 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
         />
       );
     case 'cloud':
-      return (
-        <SafeSnapshotPanel notify={notify} viewMode="cloud" onNavigate={onNavigate} />
-      );
+      return <SafeSnapshotPanel notify={notify} viewMode="cloud" onNavigate={onNavigate} />;
     default:
       return (
         <div className="panel">

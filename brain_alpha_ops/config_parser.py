@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from brain_alpha_ops.config_models import OpsConfig
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ def _validate_jsonschema(raw: dict[str, Any]) -> list[ConfigValidationError]:
     except ImportError:
         logger.debug("config_schema.validate_config not available; skipping jsonschema stage")
     except Exception as exc:
-        logger.warning("jsonschema validation failed: %s", exc, exc_info=True)
+        logger.warning("jsonschema validation failed: %s", redact_error_message(exc), exc_info=True)
     return errors
 
 
@@ -125,7 +126,7 @@ def _validate_types(raw: dict[str, Any]) -> list[ConfigValidationError]:
     except ImportError:
         logger.debug("config_type_validation not available; skipping type stage")
     except Exception as exc:
-        logger.warning("type validation failed: %s", exc, exc_info=True)
+        logger.warning("type validation failed: %s", redact_error_message(exc), exc_info=True)
     return errors
 
 
@@ -156,7 +157,7 @@ def _validate_domain(raw: dict[str, Any]) -> list[ConfigValidationError]:
     except ImportError:
         logger.debug("config_validation_helpers not available; skipping domain stage")
     except Exception as exc:
-        logger.warning("domain validation failed: %s", exc, exc_info=True)
+        logger.warning("domain validation failed: %s", redact_error_message(exc), exc_info=True)
 
     # Run full domain validation if available
     try:
@@ -183,7 +184,7 @@ def _validate_domain(raw: dict[str, Any]) -> list[ConfigValidationError]:
     except ImportError:
         logger.debug("config_domain_validation not available; skipping full domain stage")
     except Exception as exc:
-        logger.warning("full domain validation failed: %s", exc, exc_info=True)
+        logger.warning("full domain validation failed: %s", redact_error_message(exc), exc_info=True)
 
     return errors
 
@@ -338,7 +339,7 @@ def _ops_config_to_dict(config: OpsConfig) -> dict[str, Any]:
             continue
         try:
             value = getattr(config, field_name)
-        except Exception:
+        except AttributeError:
             continue
         if callable(value) or isinstance(value, type):
             continue

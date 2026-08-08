@@ -346,13 +346,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 // ImprovementHints — failure insights + improvement hint lists (merged inline)
 // ──────────────────────────────────────────────────────────────────────────
 
-function ImprovementHints({
-  failures,
-  hints,
-}: {
-  failures: FailureItem[];
-  hints: string[];
-}) {
+function ImprovementHints({ failures, hints }: { failures: FailureItem[]; hints: string[] }) {
   if (failures.length === 0 && hints.length === 0) return null;
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -14,12 +14,34 @@ Usage in pipeline::
 
 from __future__ import annotations
 
+_NUMPY_INSTALL_HINT = (
+    "NumPy is required for the permutation-test filter. Install it with: "
+    "python -m pip install 'numpy>=1.26'  (or reinstall the package so the "
+    "default dependency set is present)."
+)
+
+
+def _require_numpy():
+    """Return the numpy module or raise a clear, actionable error.
+
+    numpy is imported lazily so that importing this module never fails the
+    wider test collection when numpy is absent. When the filter is actually
+    used without numpy, the user gets an explicit install hint.
+    """
+    if _np is None:
+        raise ImportError(_NUMPY_INSTALL_HINT)
+    return _np
+
+
+try:
+    import numpy as _np
+except ImportError:  # pragma: no cover - optional runtime dependency
+    _np = None
+
 import math
 import random as _random
 from dataclasses import dataclass, field
 from typing import Any
-
-import numpy as np
 
 
 # ---------------------------------------------------------------------------
@@ -89,7 +111,8 @@ class PermutationFilter:
                 "sharpe".
         """
         self.alpha = alpha
-        self._rng = np.random.RandomState(seed)
+        np_mod = _require_numpy()
+        self._rng = np_mod.random.RandomState(seed)
         if metric not in ("spearman", "pearson", "sharpe"):
             raise ValueError(
                 f"Unsupported metric '{metric}'; use 'spearman', 'pearson', or 'sharpe'"
@@ -120,6 +143,7 @@ class PermutationFilter:
         Returns:
             ``PermutationResult`` with p-value, significance flag, etc.
         """
+        np = _require_numpy()
         factor_values = self._extract_series(candidate, (
             "factor_values", "factor_values_series",
         ))
@@ -218,6 +242,7 @@ class PermutationFilter:
         n = len(returns)
         if n < 2:
             return returns.copy()
+        np = _require_numpy()
         offset = _random.Random().randint(1, n - 1)
         return np.concatenate([returns[offset:], returns[:offset]])
 
@@ -294,6 +319,7 @@ class PermutationFilter:
     @staticmethod
     def _pearson_r(x: np.ndarray, y: np.ndarray) -> float:
         """Vectorised Pearson correlation using numpy."""
+        np = _require_numpy()
         n = min(len(x), len(y))
         if n < 3:
             return 0.0
@@ -307,6 +333,7 @@ class PermutationFilter:
     @staticmethod
     def _sharpe(returns: np.ndarray) -> float:
         """Annualised Sharpe ratio from daily returns."""
+        np = _require_numpy()
         n = len(returns)
         if n < 5:
             return 0.0
@@ -319,6 +346,7 @@ class PermutationFilter:
     @staticmethod
     def _numpy_rank(values: np.ndarray) -> np.ndarray:
         """Compute average-rank (1-based) for a 1-D array."""
+        np = _require_numpy()
         order = np.argsort(values)
         ranks = np.empty(len(values), dtype=np.float64)
         ranks[order] = np.arange(1, len(values) + 1, dtype=np.float64)

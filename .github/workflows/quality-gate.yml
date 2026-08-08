@@ -51,7 +51,6 @@ jobs:
       - name: 3.5/9 - npm audit
         working-directory: brain_alpha_ops/web/react_app
         run: npm ci --ignore-scripts 2>/dev/null && npm audit --audit-level=critical
-        continue-on-error: true
 
       - name: 4/9 - Frontend inline sync
         run: python brain_alpha_ops/build_inline.py --check --json
@@ -70,6 +69,12 @@ jobs:
 
       - name: 7.6/9 - BRAIN contract check
         run: python scripts/check_brain_contract.py --json
+
+      - name: 7.7/9 - pip audit (high/critical blocking)
+        run: |
+          python -m pip install pip-audit 2>/dev/null || true
+          python -m pip_audit --disable-pip --requirement requirements.lock --strict || \
+            { echo "::error::pip-audit found high/critical vulnerabilities in runtime dependencies"; exit 1; }
 
       - name: 8/9 - Run tests with coverage
         run: python -m pytest tests/ -v --tb=short --cov=brain_alpha_ops --cov-report=term --cov-report=xml
@@ -105,11 +110,22 @@ jobs:
           BRAIN_BROWSER_E2E_LIVE: "0"
         run: python -m pytest tests/test_browser_execution_adapter.py -v --tb=short
 
-      - name: E2E smoke (mock mode, skip on missing credentials)
+      - name: E2E smoke (mock mode - mandatory gate)
         env:
           BRAIN_BROWSER_E2E_LIVE: "0"
         run: python -m pytest tests/e2e/test_real_web_flow.py -v --tb=short
-        continue-on-error: true
+
+      - name: E2E smoke (live mode - conditional on BRAIN credentials)
+        if: ${{ env.BRAIN_USERNAME != '' && env.BRAIN_PASSWORD != '' }}
+        env:
+          BRAIN_BROWSER_E2E_LIVE: "1"
+        run: |
+          echo "Live BRAIN credentials present - running live smoke."
+          python -m pytest tests/e2e/test_real_web_flow.py -v --tb=short
+      - name: E2E smoke (live mode - skipped, credentials not provided)
+        if: ${{ !(env.BRAIN_USERNAME != '' && env.BRAIN_PASSWORD != '') }}
+        run: |
+          echo "::warning::Live BRAIN smoke skipped: BRAIN_USERNAME/BRAIN_PASSWORD not provided. Mock-mode E2E already ran as the mandatory gate."
 
   frontend-quality:
     runs-on: ubuntu-latest
@@ -141,7 +157,6 @@ jobs:
       - name: F3.3 - Format check (prettier)
         working-directory: brain_alpha_ops/web/react_app
         run: npm run format:check
-        continue-on-error: true
 
       - name: F3.4 - Unit tests (vitest run)
         working-directory: brain_alpha_ops/web/react_app
@@ -149,5 +164,25 @@ jobs:
 
       - name: npm audit (advisory)
         working-directory: brain_alpha_ops/web/react_app
-        run: npm audit --audit-level=moderate
-        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  release-readiness:
+    # Aggregator gate: succeeds ONLY when every mandatory job succeeds.
+    # Any required job failing (or being cancelled) blocks this job, so the
+    # overall CI status reflects true release readiness.
+    needs: [quality-gate, browser-e2e-contract, frontend-quality]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check required jobs
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          echo "::error::release-readiness FAILED: one or more mandatory jobs did not succeed."
+          echo "quality-gate=${{ needs.quality-gate.result }}"
+          echo "browser-e2e-contract=${{ needs.browser-e2e-contract.result }}"
+          echo "frontend-quality=${{ needs.frontend-quality.result }}"
+          exit 1
+      - name: All mandatory jobs passed
+        if: ${{ !cancelled() && !(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+        run: echo "release-readiness PASSED: all mandatory jobs are green."

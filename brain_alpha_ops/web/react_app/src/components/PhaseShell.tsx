@@ -101,12 +101,14 @@ export default memo(function PhaseShell({
 
       <div
         className="phase-shell-body"
-        style={isBlocked ? { opacity: 0.45, filter: 'grayscale(0.3)', pointerEvents: 'none' } : undefined}
+        style={
+          isBlocked ? { opacity: 0.45, filter: 'grayscale(0.3)', pointerEvents: 'none' } : undefined
+        }
         aria-disabled={isBlocked || undefined}
         // W-001: inert disables all interaction + focus + screen-reader access
         // for the blocked subtree so users cannot trigger not-ready phases.
         // pointer-events:none is the fallback for browsers without inert.
-        inert={isBlocked || undefined}
+        {...({ inert: isBlocked || undefined } as React.HTMLAttributes<HTMLDivElement>)}
       >
         {children}
       </div>

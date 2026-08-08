@@ -22,8 +22,6 @@ export default memo(function PageLoader({
     <div
       className={`flex flex-col items-center justify-center gap-4 ${className}`}
       style={{ minHeight: typeof minHeight === 'number' ? `${minHeight}px` : minHeight }}
-      role="status"
-      aria-live="polite"
     >
       <Spinner size={size} />
       {message && (

@@ -51,6 +51,8 @@ export interface CandidateTableToolbarProps {
   /** The raw input value from the user (before debounce) */
   filterInput?: string;
   remoteTruncated: boolean;
+  /** When true, render the structural skeleton (no functional lifecycle replay). */
+  skeleton?: boolean;
 
   // Controls
   showProductionControls: boolean;
@@ -157,6 +159,7 @@ export function CandidateTableToolbar({
   onBatchCheck,
   onBatchSimulate,
   sortedCandidates,
+  skeleton = false,
 }: CandidateTableToolbarProps) {
   return (
     <>
@@ -194,13 +197,15 @@ export function CandidateTableToolbar({
 
       <QualitySummaryBar qualitySummary={qualitySummary} />
 
-      <LifecycleReplayPanel
-        history={lifecycleHistory}
-        error={lifecycleError}
-        loading={lifecycleLoading}
-        filterActive={Boolean(filter.trim())}
-        visibleTraces={visibleLifecycleTraces}
-      />
+      {!skeleton && (
+        <LifecycleReplayPanel
+          history={lifecycleHistory}
+          error={lifecycleError}
+          loading={lifecycleLoading}
+          filterActive={Boolean(filter.trim())}
+          visibleTraces={visibleLifecycleTraces}
+        />
+      )}
 
       <CandidateDetailPanel
         showProductionControls={detailPanel.showProductionControls}

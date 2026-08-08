@@ -273,12 +273,13 @@ def test_official_sync_scan_window_count_is_not_unified_total():
     assert "api_reported_total: numberField(syncStatus?.progress, 'api_reported_total') || undefined" in source
 
 
-def test_phase_shell_keeps_blocked_content_interactive_for_recovery_controls():
+def test_phase_shell_disables_blocked_content_via_inert_and_pointer_events():
     phase_shell = _source("components/PhaseShell.tsx")
 
     assert 'className="phase-shell-body"' in phase_shell
-    assert "pointerEvents" not in phase_shell
+    assert "pointerEvents: 'none'" in phase_shell
     assert "filter: 'grayscale(0.3)'" in phase_shell
+    assert "inert" in phase_shell
 
 
 def test_react_submission_config_and_job_contracts_match_backend_routes():
@@ -351,7 +352,7 @@ def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
 
     assert "import SubmissionPanel" not in app
     assert "SubmissionPanel notify={notify}" not in app
-    assert "<SubmissionConfirmPanel notify={notify}" in app
+    assert "<SafeSubmissionConfirmPanel" in app
     assert raw_submit_pattern.search(source_text) is None
     assert raw_submit_pattern.search(dist_text) is None
     assert "手动提交" not in dist_text
@@ -367,7 +368,7 @@ def test_react_dist_preserves_browser_safe_credentials_and_sync_recovery_contrac
     assert "brain_alpha_active_sync_job_id" in dist_text
     assert "/api/sync_status?compact=1" in dist_text
     assert "/api/sync_status?job_id=" in dist_text
-    assert "Request failed" in dist_text
+    assert "网络请求失败，请检查连接后重试。" in dist_text
     assert "HTTP ${" in dist_text
     assert "ok:!1" in dist_text
     assert "/api/sync_alphas" in dist_text
@@ -394,7 +395,7 @@ def test_react_official_operations_is_web_operator_console_not_cli_surface():
     assert '"visual_terminal"' not in types
     assert "official_operations: '官方操作'" in app
     assert "case 'official_operations':" in app
-    assert "<OfficialOperationsPanel" in app
+    assert "<SafeOfficialOperationsPanel" in app
     assert "notify={notify}" in app
     assert "credentials={credentials}" in app
     assert "VisualTerminalPanel" not in app

@@ -2602,21 +2602,21 @@ describe("CandidateTable", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { rerender } = render(<CandidateTable notify={notify} viewMode="passed" />);
+    const { rerender } = renderWithProviders(<CandidateTable notify={notify} viewMode="passed" />);
     await screen.findByRole("heading", { name: "已达标候选" });
     expect((await screen.findAllByText("passed_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("submitted_expr")).not.toBeInTheDocument();
 
-    rerender(<CandidateTable notify={notify} viewMode="submittable" />);
+    rerenderWithProviders(<CandidateTable notify={notify} viewMode="submittable" />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/check_results", expect.any(Object)));
     expect((await screen.findAllByText("passed_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("stale_expr")).not.toBeInTheDocument();
 
-    rerender(<CandidateTable notify={notify} viewMode="submitted" />);
+    rerenderWithProviders(<CandidateTable notify={notify} viewMode="submitted" />);
     expect((await screen.findAllByText("submitted_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("failed_expr")).not.toBeInTheDocument();
 
-    rerender(<CandidateTable notify={notify} viewMode="failed" />);
+    rerenderWithProviders(<CandidateTable notify={notify} viewMode="failed" />);
     expect((await screen.findAllByText("failed_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("passed_expr")).not.toBeInTheDocument();
   });
@@ -2655,11 +2655,11 @@ describe("CandidateTable", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const { rerender } = render(<CandidateTable notify={notify} viewMode="candidates" />);
+    const { rerender } = renderWithProviders(<CandidateTable notify={notify} viewMode="candidates" />);
     expect((await screen.findAllByText("qualified_expr")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("待确认").length).toBeGreaterThan(0);
 
-    rerender(<CandidateTable notify={notify} viewMode="passed" />);
+    rerenderWithProviders(<CandidateTable notify={notify} viewMode="passed" />);
     await screen.findByRole("heading", { name: "已达标候选" });
     expect((await screen.findAllByText("ready_expr")).length).toBeGreaterThan(0);
     expect(screen.queryAllByText("qualified_expr")).toHaveLength(0);
@@ -3359,7 +3359,7 @@ describe("JobMonitor", () => {
     expect(screen.getByText("job_st...lost")).toBeInTheDocument();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(6500);
+      await vi.advanceTimersByTimeAsync(25000);
     });
     await flushPromises();
 
@@ -3401,7 +3401,7 @@ describe("JobMonitor", () => {
       expect(screen.getByText("job_ne...lost")).toBeInTheDocument();
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(6500);
+        await vi.advanceTimersByTimeAsync(25000);
       });
       await flushPromises();
 

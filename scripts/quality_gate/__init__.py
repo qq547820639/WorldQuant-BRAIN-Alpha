@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     pytest_args = list(args.pytest_args or [])
     if pytest_args and pytest_args[0] == "--":
         pytest_args = pytest_args[1:]
-    result = run_quality_gate(
+    result = _cli.run_quality_gate(
         config_path=Path(args.config),
         html_path=Path(args.html),
         include_all_secrets=args.include_all_secrets,
@@ -849,3 +849,15 @@ def _timeout_text(value: str | bytes | None, default: str = "") -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+# Back-compat private aliases.
+#
+# The former monolithic ``scripts/quality_gate.py`` exposed ``_steps`` and
+# ``_cli`` submodules; existing tests route their monkeypatching through
+# ``quality_gate._steps._run_python_module`` and ``quality_gate._cli.run_quality_gate``.
+# After the Task A5 package split those symbols live at the package top level,
+# so we alias them to the package module itself to keep the public behaviour
+# (and the test contract) unchanged.
+_steps = sys.modules[__name__]
+_cli = sys.modules[__name__]

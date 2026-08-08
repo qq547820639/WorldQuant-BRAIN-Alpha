@@ -305,11 +305,13 @@ export function payloadFromForm(form: ConfigForm): Record<string, unknown> {
       language: form.language,
       type: form.alphaType,
     },
-    candidates: form.candidates,
-    cycles: form.cycles,
-    poolSize: form.poolSize,
-    backtestBatchSize: form.backtestBatchSize,
-    requireCloudSync: form.requireCloudSync,
+    budget: {
+      max_candidates_per_cycle: form.candidates,
+      max_cycles: form.cycles,
+      retained_alpha_pool_size: form.poolSize,
+      official_backtest_batch_size: form.backtestBatchSize,
+      require_cloud_sync: form.requireCloudSync,
+    },
     thresholds: {
       min_sharpe: form.minSharpe,
       min_fitness: form.minFitness,

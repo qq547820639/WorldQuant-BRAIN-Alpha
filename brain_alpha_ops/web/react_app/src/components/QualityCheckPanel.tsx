@@ -66,7 +66,9 @@ export default function QualityCheckPanel({ notify }: Props) {
           }}
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-negative">达标检查数据加载失败: {safeDisplayErrorMessage(error)}</p>
+            <p className="text-sm text-negative">
+              达标检查数据加载失败: {safeDisplayErrorMessage(error)}
+            </p>
             <button type="button" onClick={load} className="btn btn-secondary btn-sm">
               重试
             </button>

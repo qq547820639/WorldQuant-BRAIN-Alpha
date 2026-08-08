@@ -1,0 +1,38 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.9 [39m[90m/workspace/brain_alpha_ops/web/react_app[39m
+
+[90mstdout[2m | tests/scratch_debug.test.tsx[2m > [22m[2mscratch debug[2m > [22m[2mchecks lifecycle fetch with polling
+[22m[39mDEBUG lifecycleResult: {
+  ok: [33mtrue[39m,
+  summary: { record_count: [33m3[39m, alpha_count: [33m2[39m },
+  alpha_traces: [
+    {
+      trace_key: [32m'alpha_rank'[39m,
+      alpha_id: [32m'alpha_rank'[39m,
+      latest_stage: [32m'official_validation'[39m,
+      latest_status: [32m'PASSED'[39m,
+      status_category: [32m'passed'[39m,
+      event_count: [33m2[39m,
+      next_action: [32m'continue_validation'[39m,
+      blocked: [33mtrue[39m,
+      passed: [33mtrue[39m
+    }
+  ]
+}
+DEBUG alpha_traces len: [33m1[39m
+
+[90mstdout[2m | tests/scratch_debug.test.tsx[2m > [22m[2mscratch debug[2m > [22m[2mchecks lifecycle fetch with polling
+[22m[39mCAPTURED AT T0: 生命周期回放本地只读非提交记录0Alpha0通过0阻断/失败0/0已提交0暂无匹配的生命周期记录。
+
+[90mstdout[2m | tests/scratch_debug.test.tsx[2m > [22m[2mscratch debug[2m > [22m[2mchecks lifecycle fetch with polling
+[22m[39mSAME NODE AFTER 3s: 生命周期回放本地只读非提交记录0Alpha0通过0阻断/失败0/0已提交0暂无匹配的生命周期记录。
+isConnected: [33mfalse[39m
+
+ [31m×[39m tests/scratch_debug.test.tsx[2m > [22mscratch debug[2m > [22mchecks lifecycle fetch with polling[33m 3173[2mms[22m[39m
+[31m   → expected '生命周期回放本地只读非提交记录0Alpha0通过0阻断/失败0/0已提交0…' to contain 'alpha_rank'[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 06:32:00
+[2m   Duration [22m 4.38s[2m (transform 440ms, setup 116ms, import 514ms, tests 3.17s, environment 300ms)[22m
+

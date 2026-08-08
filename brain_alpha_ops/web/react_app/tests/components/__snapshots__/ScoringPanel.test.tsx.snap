@@ -55,18 +55,6 @@ exports[`ScoringPanel > matches snapshot with candidate 1`] = `
         0
       </span>
     </div>
-    <div
-      data-testid="improvement-hints"
-    >
-      <span>
-        Failures: 
-        0
-      </span>
-      <span>
-        Hints: 
-        0
-      </span>
-    </div>
   </div>
 </div>
 `;

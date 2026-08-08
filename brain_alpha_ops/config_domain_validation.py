@@ -165,9 +165,11 @@ def validate_budget(errors: list[str], budget: ResearchBudget) -> None:
         "max_official_concurrent_simulations",
         "retained_alpha_pool_size",
         "official_backtest_batch_size",
-        "max_generation_attempts",
     ):
         require_int_range(errors, f"ops.budget.{field_name}", getattr(budget, field_name), min_value=1)
+    # max_generation_attempts is floored to >= 1 at usage time
+    # (research/generation_phase.py), so it is allowed to be 0 at config time.
+    require_int_range(errors, "ops.budget.max_generation_attempts", budget.max_generation_attempts, min_value=0)
     for field_name in (
         "max_official_validations_per_cycle",
         "max_official_simulations_per_cycle",

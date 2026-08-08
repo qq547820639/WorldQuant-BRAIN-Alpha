@@ -19,7 +19,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 // ── helpers ────────────────────────────────────────────────────────────────
 
 /** Component that throws during render. */
-function ThrowingChild({ message = 'boom' }: { message?: string }) {
+function ThrowingChild({ message = 'boom' }: { message?: string }): never {
   throw new Error(message);
 }
 
@@ -46,7 +46,7 @@ describe('ErrorBoundary — normal rendering', () => {
     render(
       <ErrorBoundary>
         <GoodChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByTestId('good-child')).toBeDefined();
     expect(screen.getByText('all good')).toBeDefined();
@@ -57,7 +57,7 @@ describe('ErrorBoundary — normal rendering', () => {
       <ErrorBoundary>
         <div data-testid="a">A</div>
         <div data-testid="b">B</div>
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByTestId('a')).toBeDefined();
     expect(screen.getByTestId('b')).toBeDefined();
@@ -71,7 +71,7 @@ describe('ErrorBoundary — error capture (full-page)', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     // role="alert" is present on the full-page fallback wrapper.
@@ -84,18 +84,16 @@ describe('ErrorBoundary — error capture (full-page)', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
-    expect(
-      screen.getByText('页面渲染时发生了意外错误，请尝试刷新或返回首页'),
-    ).toBeDefined();
+    expect(screen.getByText('页面渲染时发生了意外错误，请尝试刷新或返回首页')).toBeDefined();
   });
 
   it('shows the error message from the thrown Error', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild message="something broke badly" />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     // The error message is forwarded to <ActionableError> which renders
     // the cause text.  At minimum the raw message should appear somewhere
@@ -107,7 +105,7 @@ describe('ErrorBoundary — error capture (full-page)', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByText('重试')).toBeDefined();
   });
@@ -116,7 +114,7 @@ describe('ErrorBoundary — error capture (full-page)', () => {
     render(
       <ErrorBoundary>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByText('返回首页')).toBeDefined();
   });
@@ -125,7 +123,7 @@ describe('ErrorBoundary — error capture (full-page)', () => {
     render(
       <ErrorBoundary showHomeButton={false}>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.queryByText('返回首页')).toBeNull();
   });
@@ -135,7 +133,7 @@ describe('ErrorBoundary — error capture (full-page)', () => {
     render(
       <ErrorBoundary onError={onError}>
         <ThrowingChild message="callback-test" />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(onError).toHaveBeenCalled();
     expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
@@ -150,7 +148,7 @@ describe('ErrorBoundary — section level', () => {
     render(
       <ErrorBoundary level="section">
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByRole('alert')).toBeDefined();
     expect(screen.getByText('加载失败')).toBeDefined();
@@ -160,7 +158,7 @@ describe('ErrorBoundary — section level', () => {
     render(
       <ErrorBoundary level="section" title="模块出错" description="请重试该模块">
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByText('模块出错')).toBeDefined();
     expect(screen.getByText('请重试该模块')).toBeDefined();
@@ -170,7 +168,7 @@ describe('ErrorBoundary — section level', () => {
     render(
       <ErrorBoundary level="section">
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     // showHomeButton defaults to false for section-level (see renderSectionFallback).
     expect(screen.queryByText('返回首页')).toBeNull();
@@ -184,7 +182,7 @@ describe('ErrorBoundary — custom fallback', () => {
     render(
       <ErrorBoundary fallback={<div data-testid="custom-fb">custom error UI</div>}>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByTestId('custom-fb')).toBeDefined();
     expect(screen.getByText('custom error UI')).toBeDefined();
@@ -209,7 +207,7 @@ describe('ErrorBoundary — retry / reset', () => {
     render(
       <ErrorBoundary>
         <ConditionalChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     // Initially the error is caught — fallback visible.
@@ -229,7 +227,7 @@ describe('ErrorBoundary — retry / reset', () => {
     render(
       <ErrorBoundary onReset={onReset}>
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     fireEvent.click(screen.getByText('重试'));
     expect(onReset).toHaveBeenCalledOnce();
@@ -248,7 +246,7 @@ describe('ErrorBoundary — retry / reset', () => {
     render(
       <ErrorBoundary>
         <ConditionalChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByText('出现了一些问题')).toBeDefined();
 
@@ -274,7 +272,7 @@ describe('ErrorBoundary — errorKey recovery', () => {
     const { rerender } = render(
       <ErrorBoundary errorKey="v1">
         <ConditionalChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     // Error state.
@@ -285,7 +283,7 @@ describe('ErrorBoundary — errorKey recovery', () => {
     rerender(
       <ErrorBoundary errorKey="v2">
         <ConditionalChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
 
     expect(screen.getByTestId('keyed-recovered')).toBeDefined();
@@ -296,7 +294,7 @@ describe('ErrorBoundary — errorKey recovery', () => {
     render(
       <ErrorBoundary errorKey="stable">
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByText('出现了一些问题')).toBeDefined();
   });
@@ -309,7 +307,7 @@ describe('ErrorBoundary — ActionableError integration', () => {
     const { container } = render(
       <ErrorBoundary>
         <ThrowingChild message="actionable-test" />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     // ActionableError renders a div with class "actionable-error-card".
     const card = container.querySelector('.actionable-error-card');
@@ -320,7 +318,7 @@ describe('ErrorBoundary — ActionableError integration', () => {
     const { container } = render(
       <ErrorBoundary level="section">
         <ThrowingChild message="section-actionable" />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     const card = container.querySelector('.actionable-error-card');
     expect(card).not.toBeNull();
@@ -334,7 +332,7 @@ describe('ErrorBoundary — custom title & description (full-page)', () => {
     render(
       <ErrorBoundary title="自定义标题" description="自定义描述">
         <ThrowingChild />
-      </ErrorBoundary>,
+      </ErrorBoundary>
     );
     expect(screen.getByText('自定义标题')).toBeDefined();
     expect(screen.getByText('自定义描述')).toBeDefined();

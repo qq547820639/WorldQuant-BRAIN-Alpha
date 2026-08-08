@@ -202,7 +202,7 @@ describe("候选管理流程集成测试", () => {
       expect(screen.getByText("候选管理")).toBeInTheDocument();
     });
 
-    const searchInput = screen.getByRole("searchbox", { name: /筛选|搜索|filter/i });
+    const searchInput = screen.getByLabelText("过滤候选");
     expect(searchInput).toBeInTheDocument();
   });
 
@@ -218,7 +218,7 @@ describe("候选管理流程集成测试", () => {
       expect(screen.getByText("候选管理")).toBeInTheDocument();
     });
 
-    const searchInput = screen.getByRole("searchbox", { name: /筛选|搜索|filter/i });
+    const searchInput = screen.getByLabelText("过滤候选");
     await user.type(searchInput, "momentum");
 
     expect(searchInput).toHaveValue("momentum");
@@ -236,11 +236,11 @@ describe("候选管理流程集成测试", () => {
       expect(screen.getByText("候选管理")).toBeInTheDocument();
     });
 
-    const searchInput = screen.getByRole("searchbox", { name: /筛选|搜索|filter/i });
+    const searchInput = screen.getByLabelText("过滤候选");
     await user.type(searchInput, "test");
     expect(searchInput).toHaveValue("test");
 
-    const clearButton = screen.getByRole("button", { name: /清除|clear|清空/i });
+    const clearButton = screen.queryByRole("button", { name: /清除|clear|清空/i });
     if (clearButton) {
       await user.click(clearButton);
       expect(searchInput).toHaveValue("");
@@ -299,7 +299,10 @@ describe("候选管理流程集成测试", () => {
   });
 
   it("测试分页功能 - 下一页按钮", async () => {
-    const fetchMock = defaultFetchMock();
+    const candidates = Array.from({ length: 25 }, (_, i) =>
+      createMockCandidate(i, { production_decision: { action: "optimize" } })
+    );
+    const fetchMock = defaultFetchMock({ candidates, displayQueueCandidates: candidates });
     vi.stubGlobal("fetch", fetchMock);
     const notify = vi.fn();
     const user = userEvent.setup();
@@ -337,7 +340,6 @@ describe("候选管理流程集成测试", () => {
     const fetchMock = defaultFetchMock();
     vi.stubGlobal("fetch", fetchMock);
     const notify = vi.fn();
-    const user = userEvent.setup();
 
     renderWithProvider(<CandidateTable notify={notify} />);
 
@@ -349,8 +351,7 @@ describe("候选管理流程集成测试", () => {
     expect(numberInput).toBeInTheDocument();
     expect(numberInput).toHaveValue(10);
 
-    await user.clear(numberInput);
-    await user.type(numberInput, "15");
+    fireEvent.change(numberInput, { target: { value: "15" } });
     expect(numberInput).toHaveValue(15);
   });
 

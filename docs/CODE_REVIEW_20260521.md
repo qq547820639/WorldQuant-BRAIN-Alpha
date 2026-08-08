@@ -139,7 +139,7 @@
 - 状态：已完成当前源码扫描与门禁化。
 - 当前证据：新增 `scripts/check_text_encoding.py`，并接入 `scripts/quality_gate.py` 的 `text_encoding_scan` 步骤；`check_text_encoding.py --json` 扫描 292 个文本文件，`findings: []`。
 - 验证：新增 `test_text_encoding_scan_rejects_mojibake` 和 `test_text_encoding_scan_accepts_current_workspace`，相关质量门禁测试 6 项通过。
-- 证据：多个中文文本显示为 mojibake，例如 `鎺掗槦`、`浜戠`、`鏆傛棤`。
+- 证据：多个中文文本显示为 mojibake，例如 `鎺掗槦`、`浜戠`、`鏆傛棤`。
 - 影响：用户体验、测试断言和维护沟通都被干扰；后续替换文案时容易误删业务含义。
 - 建议：统一以 UTF-8 重新保存受影响文件，增加一个轻量扫描脚本查常见乱码片段；测试断言尽量验证语义常量或 data 属性。
 

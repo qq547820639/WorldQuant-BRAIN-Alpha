@@ -70,7 +70,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     esbuild: {
-      drop: isProduction ? ["console.debug", "debugger"] : [],
+      drop: isProduction ? ["debugger"] : [],
+      pure: isProduction ? ["console.debug"] : [],
       legalComments: "none",
     },
     test: {

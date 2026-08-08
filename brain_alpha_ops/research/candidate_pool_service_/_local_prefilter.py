@@ -209,6 +209,7 @@ class _LocalPrefilterMixin:
                 )
         except Exception:
             # Permutation filter is advisory; never crash the pipeline.
+            logger.debug("permutation filter skipped (advisory); continuing pipeline")
             pass
 
     @staticmethod

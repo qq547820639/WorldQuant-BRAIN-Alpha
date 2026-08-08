@@ -67,10 +67,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   renderFullPageFallback() {
     const { title, description, showHomeButton = true } = this.props;
     return (
-      <div
-        className="min-h-screen flex items-center justify-center bg-surface-root p-4"
-        role="alert"
-      >
+      <div className="min-h-screen flex items-center justify-center bg-surface-root p-4">
         <div className="max-w-md w-full text-center">
           <div className="mb-6 flex justify-center">
             <div
@@ -115,6 +112,14 @@ export default class ErrorBoundary extends Component<Props, State> {
                 onNavigate={this.props.onNavigate}
                 title="渲染错误"
               />
+              {typeof this.state.error.message === 'string' && this.state.error.message && (
+                <p
+                  className="mt-2 text-xs"
+                  style={{ color: 'var(--color-text-muted)', wordBreak: 'break-word' }}
+                >
+                  {this.state.error.message}
+                </p>
+              )}
             </div>
           )}
 
@@ -136,7 +141,7 @@ export default class ErrorBoundary extends Component<Props, State> {
   renderSectionFallback() {
     const { title, description, showHomeButton = false } = this.props;
     return (
-      <div className="panel" role="alert">
+      <div className="panel">
         <div className="panel-body-padded" style={{ textAlign: 'center', padding: '2rem' }}>
           <div className="mb-4 flex justify-center">
             <div
@@ -184,6 +189,14 @@ export default class ErrorBoundary extends Component<Props, State> {
                 onNavigate={this.props.onNavigate}
                 title="渲染错误"
               />
+              {typeof this.state.error.message === 'string' && this.state.error.message && (
+                <p
+                  className="mt-2 text-xs"
+                  style={{ color: 'var(--color-text-muted)', wordBreak: 'break-word' }}
+                >
+                  {this.state.error.message}
+                </p>
+              )}
             </div>
           )}
 

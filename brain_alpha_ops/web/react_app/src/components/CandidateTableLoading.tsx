@@ -45,6 +45,7 @@ export default function CandidateTableLoading({
       <CandidateTableToolbar
         title={title}
         viewMode={viewMode}
+        skeleton
         retainedCount={0}
         targetPoolSize={targetPoolSize}
         poolEligibleCount={0}

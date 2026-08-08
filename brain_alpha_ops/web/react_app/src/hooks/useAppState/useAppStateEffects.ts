@@ -12,7 +12,14 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { BrainCredentials, Candidate, CardViewId, PhaseData, PhaseId, PhaseGroup } from '@/types';
+import type {
+  BrainCredentials,
+  Candidate,
+  CardViewId,
+  PhaseData,
+  PhaseId,
+  PhaseGroup,
+} from '@/types';
 import { useApi } from '@/hooks/useApi';
 import type { ApiMeta } from '@/hooks/useApi';
 import type { useGlobalData } from '@/hooks/useGlobalData';

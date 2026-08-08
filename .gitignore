@@ -26,6 +26,17 @@ _archive_before_rebuild_*/
 # ---- Output artifacts ----
 output/
 
+# ---- Runtime-generated data (never commit) ----
+data/*.jsonl
+data/*.sqlite
+data/run_history/
+data/knowledge/
+data/api_cache/
+data/_codex_bench*/
+data/checkpoints/
+data/*.log
+data/e2e_screenshots/
+
 # ---- Credentials (NEVER commit) ----
 .env
 .env.*

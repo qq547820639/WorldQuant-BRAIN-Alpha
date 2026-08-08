@@ -183,12 +183,18 @@ def test_react_dist_artifact_uses_csp_compatible_runtime_injection():
 
     rendered = web_html.render_html("csrf-token", "stream-token", html)
     csp = web_html.content_security_policy_for_html(rendered)
-    asset_paths = re.findall(r'/(assets/[^"\']+)', html)
-    asset_text = "\n".join((dist / asset_path).read_text(encoding="utf-8") for asset_path in asset_paths)
+    # Scan ALL built JS assets (entry + code-split lazy chunks). The security
+    # headers (CSRF / request-id) may live in a dynamically-imported chunk, so
+    # restricting the scan to entry assets referenced by index.html would miss
+    # them. Every shipped JS artifact must respect the credential policy.
+    asset_paths = re.findall(r'/(assets/[^"\']+?\.js)', html)
+    asset_files = sorted((dist / "assets").glob("*.js"))
+    scan_files = sorted({*(dist / ap for ap in asset_paths), *asset_files})
+    asset_text = "\n".join(p.read_text(encoding="utf-8") for p in scan_files if p.is_file())
 
     assert "@babel/standalone" not in html
     assert 'type="text/babel"' not in html
-    assert asset_paths
+    assert asset_files
     assert re.search(r"/assets/index-[^\"']+\.js", html)
     assert re.search(r"/assets/[^\"']+\.css", html)
     assert 'credentials:"same-origin"' in asset_text

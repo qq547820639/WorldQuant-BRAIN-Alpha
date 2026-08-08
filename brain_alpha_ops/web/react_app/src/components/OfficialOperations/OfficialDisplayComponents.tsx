@@ -160,7 +160,13 @@ export const OperationLog = memo(function OperationLog({
   );
 });
 
-export function OperationsLog({ logs, onClear }: { logs: OperationLogEntry[]; onClear: () => void }) {
+export function OperationsLog({
+  logs,
+  onClear,
+}: {
+  logs: OperationLogEntry[];
+  onClear: () => void;
+}) {
   return <OperationLog logs={logs} onClear={onClear} />;
 }
 

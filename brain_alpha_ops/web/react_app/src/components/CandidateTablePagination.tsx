@@ -24,7 +24,7 @@ export default function CandidateTablePagination({
 }: PaginationProps) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border-subtle px-3.5 py-3">
-      <div className="text-sm text-text-tertiary" role="status" aria-live="polite">
+      <div className="text-sm text-text-tertiary" aria-live="polite">
         显示 {visibleStart}-{visibleEnd}，共 {totalItems} 条
       </div>
       {totalItems > pageSize && (

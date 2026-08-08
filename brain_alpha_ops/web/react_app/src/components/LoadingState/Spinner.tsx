@@ -34,6 +34,7 @@ export default memo(function Spinner({
     <span
       className={`inline-flex items-center justify-center ${className}`}
       role="status"
+      aria-live="polite"
       aria-label={label}
     >
       <svg

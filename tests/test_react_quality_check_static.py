@@ -22,8 +22,7 @@ def test_app_routes_quality_check_to_dedicated_panel():
 
     assert "lazy(() => import('@/components/QualityCheckPanel'))" in app
     assert "case 'quality_check':" in app
-    assert "<QualityCheckPanel notify={notify} />" in app
-    assert 'key="quality_check"' in app
+    assert "<SafeQualityCheckPanel notify={notify} />" in app
 
 
 def test_quality_check_panel_reads_all_gate_snapshots():

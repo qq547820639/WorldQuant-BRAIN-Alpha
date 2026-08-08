@@ -3,7 +3,7 @@ import { useState, useCallback } from 'react';
 export type SortDirection = 'asc' | 'desc';
 
 export interface UseSortingOptions<T extends string> {
-  initialSortKey: T;
+  initialSortKey?: T;
   initialSortAsc?: boolean;
 }
 
@@ -18,10 +18,12 @@ export interface UseSortingResult<T extends string> {
   sortItems: <U extends Record<T, any>>(items: U[]) => U[];
 }
 
-export function useSorting<T extends string>(options: UseSortingOptions<T>): UseSortingResult<T> {
+export function useSorting<T extends string>(
+  options: UseSortingOptions<T> = {}
+): UseSortingResult<T> {
   const { initialSortKey, initialSortAsc = false } = options;
 
-  const [sortKey, setSortKey] = useState<T>(initialSortKey);
+  const [sortKey, setSortKey] = useState<T>(initialSortKey as T);
   const [sortAsc, setSortAsc] = useState<boolean>(initialSortAsc);
 
   const sortDirection: SortDirection = sortAsc ? 'asc' : 'desc';

@@ -74,7 +74,11 @@ export default memo(function RetryButton({
       }}
       aria-busy={loading}
     >
-      {loading && <Spinner size="xs" color="currentColor" />}
+      {loading && (
+        <span aria-hidden="true">
+          <Spinner size="xs" color="currentColor" />
+        </span>
+      )}
       <span>{loading ? loadingLabel : label}</span>
     </button>
   );

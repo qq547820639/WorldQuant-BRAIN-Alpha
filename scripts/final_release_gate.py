@@ -560,23 +560,13 @@ def _build_manifest_hash(
         "pyproject.toml",
         "brain_alpha_ops/runner.py",
         "brain_alpha_ops/brain_api/official/__init__.py",
-        "brain_alpha_ops/research/pipeline.py",
+        "brain_alpha_ops/research/pipeline/pipeline.py",
         "brain_alpha_ops/scoring/release_score_gate/__init__.py",
-        "brain_alpha_ops/scoring/release_score_gate/_models.py",
-        "brain_alpha_ops/scoring/release_score_gate/_checks.py",
-        "brain_alpha_ops/scoring/release_score_gate/_decision.py",
-        "brain_alpha_ops/scoring/release_score_gate/_helpers.py",
+        "brain_alpha_ops/scoring/release_score_gate/release_score_gate.py",
         "brain_alpha_ops/web/__init__.py",
         "brain_alpha_ops/web/config/web_capability_registry.py",
         "scripts/check_capability_registry.py",
-        "scripts/final_release_gate/__init__.py",
-        "scripts/final_release_gate/_models.py",
-        "scripts/final_release_gate/_config.py",
-        "scripts/final_release_gate/_checks.py",
-        "scripts/final_release_gate/_context_checks.py",
-        "scripts/final_release_gate/_tracker.py",
-        "scripts/final_release_gate/_manifest.py",
-        "scripts/final_release_gate/_runner.py",
+        "scripts/final_release_gate.py",
     ))]
     digest = hashlib.sha256()
     for path in tracked:
@@ -616,7 +606,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

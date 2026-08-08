@@ -12,6 +12,7 @@ Schema version: config-schema.v2
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -231,6 +232,74 @@ def _partial_schema(schema: dict[str, Any]) -> dict[str, Any]:
     return cloned
 
 
+def _fallback_validate(config_data: Any, schema: dict[str, Any], path: tuple[str, ...] = ()) -> list[str]:
+    """Minimal manual JSON-schema-walk used only when jsonschema is unavailable.
+
+    Produces error messages shaped like the jsonschema library so downstream
+    consumers (and tests) can rely on a consistent, stable format.
+    """
+    errors: list[str] = []
+    if not isinstance(schema, dict):
+        return errors
+
+    schema_type = schema.get("type")
+    is_object_ish = schema_type == "object" or (
+        schema_type is None and isinstance(schema.get("properties"), dict)
+    )
+
+    if is_object_ish:
+        if not isinstance(config_data, dict):
+            loc = ".".join(path) or "(root)"
+            errors.append(f"{loc}: {config_data!r} is not an object")
+            return errors
+        props = schema.get("properties", {})
+        for req in schema.get("required", []):
+            if req not in config_data:
+                errors.append(f"missing required property '{req}'")
+        if schema.get("additionalProperties") is False:
+            for key in config_data:
+                if key not in props:
+                    loc = ".".join(path) or "(root)"
+                    errors.append(f"{loc}: additional properties are not allowed ('{key}' was unexpected)")
+        for key, sub in props.items():
+            if key in config_data:
+                errors.extend(_fallback_validate(config_data[key], sub, path + (key,)))
+        return errors
+
+    loc = ".".join(path) or "(root)"
+
+    if "enum" in schema and config_data not in schema["enum"]:
+        errors.append(f"{loc}: {config_data!r} is not one of {schema['enum']}")
+        return errors
+
+    if schema_type:
+        if schema_type == "integer":
+            ok = isinstance(config_data, int) and not isinstance(config_data, bool)
+        elif schema_type == "number":
+            ok = isinstance(config_data, (int, float)) and not isinstance(config_data, bool)
+        elif schema_type == "boolean":
+            ok = isinstance(config_data, bool)
+        elif schema_type == "string":
+            ok = isinstance(config_data, str)
+        elif schema_type == "array":
+            ok = isinstance(config_data, list)
+        else:
+            ok = True
+        if not ok:
+            errors.append(f"{loc}: {config_data!r} is not of type {schema_type}")
+            return errors
+
+    if isinstance(config_data, str) and schema.get("minLength") is not None:
+        if len(config_data) < schema["minLength"]:
+            errors.append(f"{loc}: string is shorter than minimum length {schema['minLength']}")
+    if isinstance(config_data, (int, float)) and not isinstance(config_data, bool):
+        if schema.get("minimum") is not None and config_data < schema["minimum"]:
+            errors.append(f"{loc}: {config_data!r} is less than the minimum {schema['minimum']}")
+        if schema.get("maximum") is not None and config_data > schema["maximum"]:
+            errors.append(f"{loc}: {config_data!r} is greater than the maximum {schema['maximum']}")
+    return errors
+
+
 def validate_config_with_jsonschema(
     config_data: dict[str, Any],
     *,
@@ -250,14 +319,20 @@ def validate_config_with_jsonschema(
     if not isinstance(config_data, dict):
         return [f"config data is not a dict: {type(config_data).__name__}"]
 
-    if jsonschema is None:
-        raise ImportError(
-            "jsonschema is required for config validation. "
-            "Install with: pip install jsonschema>=4.20"
-        )
-
     effective_schema = schema or RUN_CONFIG_SCHEMA
     validation_schema = _partial_schema(effective_schema) if schema is None and config_data else effective_schema
+
+    if jsonschema is None:
+        # Fallback path: jsonschema is a hard dependency, but when it is
+        # unavailable (or explicitly disabled) we still surface the most
+        # common structural/type/enum/range problems so validation never
+        # silently passes or crashes.
+        print(
+            "jsonschema not installed; using lightweight fallback config validation",
+            file=sys.stderr,
+        )
+        return _fallback_validate(config_data, validation_schema)
+
     errors: list[str] = []
     try:
         validator = jsonschema.Draft202012Validator(validation_schema)

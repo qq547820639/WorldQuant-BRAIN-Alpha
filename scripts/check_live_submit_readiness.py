@@ -502,7 +502,7 @@ def _candidate_pool_from_container(
 
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_JOBS = ROOT / "data" / "jobs_production.json"
 DEFAULT_JOB_LEDGER_GLOB = "jobs_*.json"

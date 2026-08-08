@@ -352,10 +352,7 @@ interface ScoringConfigGroupProps {
   onShowWeightModal: (show: boolean) => void;
 }
 
-export function ScoringConfigGroup({
-  scoring,
-  onShowWeightModal,
-}: ScoringConfigGroupProps) {
+export function ScoringConfigGroup({ scoring, onShowWeightModal }: ScoringConfigGroupProps) {
   const { isDark, toggleTheme } = useThemeContext();
 
   return (

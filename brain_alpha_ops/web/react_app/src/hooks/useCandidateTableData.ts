@@ -95,6 +95,15 @@ export function useCandidateTableData(options: UseCandidateTableDataOptions) {
   const lastPoolDeficitWarningRef = useRef<number>(0);
   const POOL_DEFICIT_WARNING_COOLDOWN_MS = 30 * 60 * 1000;
 
+  // Keep the latest snapshot of global candidates in a ref so loadCandidates
+  // does NOT depend on globalCandidatesData identity. globalCandidatesData is a
+  // fresh object reference after every refreshAll() fetch, which previously
+  // re-created loadCandidates → re-ran the load effect → refreshAll() → loop.
+  const globalCandidatesDataRef = useRef(globalCandidatesData);
+  useEffect(() => {
+    globalCandidatesDataRef.current = globalCandidatesData;
+  }, [globalCandidatesData]);
+
   const processCandidatesData = useCallback(
     (result: typeof globalCandidatesData): LoadedCandidateState | null => {
       if (!result) return null;
@@ -148,7 +157,7 @@ export function useCandidateTableData(options: UseCandidateTableDataOptions) {
 
   const loadCandidates = useCallback(async (): Promise<LoadedCandidateState | null> => {
     refreshAll();
-    const loaded = processCandidatesData(globalCandidatesData);
+    const loaded = processCandidatesData(globalCandidatesDataRef.current);
     const [checkResultsResult, lifecycleResult] = await Promise.all([
       callCheckResultsApi<{ items?: CandidateCheckResult[] }>('/api/check_results'),
       callLifecycleApi<AlphaLifecycleHistoryResponse>('/api/alpha_lifecycle?limit=250'),
@@ -167,14 +176,7 @@ export function useCandidateTableData(options: UseCandidateTableDataOptions) {
       setLifecycleError('生命周期历史加载失败');
     }
     return loaded;
-  }, [
-    refreshAll,
-    processCandidatesData,
-    globalCandidatesData,
-    callCheckResultsApi,
-    callLifecycleApi,
-    notify,
-  ]);
+  }, [refreshAll, processCandidatesData, callCheckResultsApi, callLifecycleApi, notify]);
 
   const refreshCheckResults = useCallback(async () => {
     if (viewMode !== 'submittable') return;

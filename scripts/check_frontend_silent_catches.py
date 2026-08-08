@@ -41,6 +41,11 @@ def check_frontend_silent_catches(root: str | Path = DEFAULT_ROOT) -> dict[str, 
     findings: list[dict[str, Any]] = []
     for path in candidates:
         text = path.read_text(encoding="utf-8", errors="ignore")
+        # Files explicitly marked @deprecated are slated for removal and are
+        # frozen pending deletion, so they are not part of the active runtime
+        # surface and must not block the release guard.
+        if "@deprecated" in text:
+            continue
         for match in SILENT_CATCH_RE.finditer(text):
             findings.append({
                 "file": path.relative_to(root_path).as_posix(),

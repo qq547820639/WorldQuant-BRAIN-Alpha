@@ -187,70 +187,72 @@ export default function Dashboard({
 
           {!loading && !errors.length && (
             <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-              <TrendPanel
-                title="候选总数"
-                data={trendCandidates}
-                unit="个"
-                color="var(--color-info-text)"
-                currentValue={
-                  memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0
-                }
-                change={computeTrendChange(trendCandidates)}
-              />
-              <KpiCard
-                label="云端 Alpha"
-                value={cloudSummaryData.count ?? '--'}
-                subtitle={
-                  cloud
-                    ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(
-                        cloudSummaryData.age_seconds,
-                        cloudSummaryData.loaded_at
-                      )}`
-                    : '等待刷新'
-                }
-                trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? 'up' : 'neutral'}
-                className="hover:shadow-md transition-shadow"
-              />
-              <KpiCard
-                label="回测数"
-                value={status?.progress?.backtests_completed ?? '--'}
-                subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
-                className="hover:shadow-md transition-shadow"
-              />
-              <TrendPanel
-                title="提交数"
-                data={trendSubmissions}
-                unit="个"
-                color="var(--color-status-active-text)"
-                currentValue={
-                  status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0
-                }
-                change={computeTrendChange(trendSubmissions)}
-              />
-            </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                <TrendPanel
+                  title="候选总数"
+                  data={trendCandidates}
+                  unit="个"
+                  color="var(--color-info-text)"
+                  currentValue={
+                    memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0
+                  }
+                  change={computeTrendChange(trendCandidates)}
+                />
+                <KpiCard
+                  label="云端 Alpha"
+                  value={cloudSummaryData.count ?? '--'}
+                  subtitle={
+                    cloud
+                      ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(
+                          cloudSummaryData.age_seconds,
+                          cloudSummaryData.loaded_at
+                        )}`
+                      : '等待刷新'
+                  }
+                  trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? 'up' : 'neutral'}
+                  className="hover:shadow-md transition-shadow"
+                />
+                <KpiCard
+                  label="回测数"
+                  value={status?.progress?.backtests_completed ?? '--'}
+                  subtitle={
+                    status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined
+                  }
+                  className="hover:shadow-md transition-shadow"
+                />
+                <TrendPanel
+                  title="提交数"
+                  data={trendSubmissions}
+                  unit="个"
+                  color="var(--color-status-active-text)"
+                  currentValue={
+                    status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0
+                  }
+                  change={computeTrendChange(trendSubmissions)}
+                />
+              </div>
 
-            {!loading &&
-              !memory?.total_candidates &&
-              !cloudSummaryData.count &&
-              !status?.progress?.backtests_completed &&
-              !status?.progress?.submissions && (
-                <EmptyState
-                  title="还没有运行数据"
-                  description="当前没有候选、回测或提交记录。前往「候选管理」页面启动自动推进候选池，系统将自动完成生产搜索、模拟和质量检查。"
-                  className="mb-4"
-                >
-                  {onNavigateToCandidates && (
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-sm"
-                      onClick={onNavigateToCandidates}
-                    >
-                      前往候选管理 →
-                    </button>
-                  )}
-                </EmptyState>
-              )}
+              {!loading &&
+                !memory?.total_candidates &&
+                !cloudSummaryData.count &&
+                !status?.progress?.backtests_completed &&
+                !status?.progress?.submissions && (
+                  <EmptyState
+                    title="还没有运行数据"
+                    description="当前没有候选、回测或提交记录。前往「候选管理」页面启动自动推进候选池，系统将自动完成生产搜索、模拟和质量检查。"
+                    className="mb-4"
+                  >
+                    {onNavigateToCandidates && (
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={onNavigateToCandidates}
+                      >
+                        前往候选管理 →
+                      </button>
+                    )}
+                  </EmptyState>
+                )}
             </>
           )}
 

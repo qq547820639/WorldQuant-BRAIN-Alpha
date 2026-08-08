@@ -104,8 +104,6 @@ export default memo(function CredentialQuickStart({
       const json = await call('/api/test_connection', {
         method: 'POST',
         body: JSON.stringify({
-          username: username.trim(),
-          password: password.trim(),
           token: token.trim(),
         }),
       });
@@ -173,9 +171,7 @@ export default memo(function CredentialQuickStart({
     if (!errorGuide) return;
     const retryAfter = testResult?.retry_after;
     const waitSeconds =
-      typeof retryAfter === 'number' && retryAfter > 0
-        ? retryAfter
-        : errorGuide.waitSeconds || 0;
+      typeof retryAfter === 'number' && retryAfter > 0 ? retryAfter : errorGuide.waitSeconds || 0;
     if (waitSeconds > 0) {
       setCountdown(waitSeconds);
       // U-015: store the timer in a ref so the unmount cleanup effect can

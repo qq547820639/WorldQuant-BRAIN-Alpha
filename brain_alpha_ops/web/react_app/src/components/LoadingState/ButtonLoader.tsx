@@ -16,7 +16,7 @@ export default memo(function ButtonLoader({
   loading = false,
   children,
   className = '',
-  size = 'sm',
+  size = 'xs',
 }: ButtonLoaderProps) {
   return (
     <span className={`inline-flex items-center justify-center gap-2 ${className}`}>

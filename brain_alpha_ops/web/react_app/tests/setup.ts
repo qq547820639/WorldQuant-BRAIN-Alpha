@@ -9,6 +9,14 @@ if (!HTMLElement.prototype.scrollTo) {
   });
 }
 
+if (!HTMLElement.prototype.scrollIntoView) {
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    writable: true,
+    value() {},
+  });
+}
+
 function createMockMatchMedia(query: string) {
   return {
     matches: false,
